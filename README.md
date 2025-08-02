@@ -1,9 +1,54 @@
-# Align - Configuration Language & CLI
+# 🎯 Align - Configuration Language & Toolchain
 
-[![npm version](https://badge.fury.io/js/align-config.svg)](https://badge.fury.io/js/align-config)
+[![npm version](https://img.shields.io/npm/v/align-config.svg)](https://www.npmjs.com/package/align-config)
 [![npm downloads](https://img.shields.io/npm/dm/align-config.svg)](https://www.npmjs.com/package/align-config)
 
-Align is a domain-specific configuration language and toolchain designed to make application configuration safe, predictable, and unified across environments.
+**Align** is a domain-specific configuration language and toolchain that makes application configuration safe, predictable, and unified across environments. Replace scattered `.env`, YAML, JSON, and Kubernetes overrides with a single source of truth: `.align` files.
+
+## 🚀 Quick Start
+
+**Get started in 30 seconds:**
+
+```bash
+# 1. Install Align
+npm install -g align-config
+
+# 2. Create a new project with a template
+align init --template=nodejs-api --app-name=myapp
+
+# 3. Validate your configuration
+align validate config/base.align --base
+
+# 4. Build your configuration
+align build --env=dev --out=./output/config.dev.json
+
+# 5. Analyze your configuration
+align analyze --config-dir=./config --env=dev
+```
+
+**That's it!** You now have a working configuration system. 🎉
+
+## 🎯 Common Use Cases
+
+### For New Projects
+1. **Start with a template** - `align init --template=nodejs-api --app-name=myapp`
+2. **Customize the config** - Edit the generated `.align` files
+3. **Validate your changes** - `align validate config/base.align --base`
+
+### For Existing Projects
+1. **Convert existing config** - Create `base.align` from your current config
+2. **Add environment overrides** - Create `dev.align`, `prod.align` for different environments
+3. **Validate everything** - `align validate config/base.align --base`
+
+### For Teams
+1. **Add schema validation** - Create `align.schema.json` to enforce standards
+2. **Use dry-run** - `align dry-run --env=prod --key=timeout --value=5000` to test changes
+3. **Analyze configurations** - `align analyze --config-dir=./config --env=prod` for security/performance insights
+
+### For Production
+1. **Build production config** - `align build --env=prod --out=./output/config.prod.json`
+2. **Generate Kubernetes ConfigMaps** - `align build --env=prod --k8s-configmap`
+3. **Compare environments** - `align diff --env1=dev --env2=prod` to verify changes
 
 ## 🎯 Purpose
 
@@ -120,6 +165,18 @@ align init --template=angular-app --app-name=myapp
 align init --template=microservices --app-name=myapp
 align init --template=database --app-name=myapp
 ```
+
+#### Template Guide
+Choose the template that matches your project type:
+
+- **`nodejs-api`** - Node.js/Express REST APIs
+- **`python-api`** - Python/FastAPI/Flask applications  
+- **`go-api`** - Go microservices and APIs
+- **`react-app`** - React frontend applications
+- **`nextjs-app`** - Next.js full-stack applications
+- **`angular-app`** - Angular frontend applications
+- **`microservices`** - Distributed systems with multiple services
+- **`database`** - Database-focused applications (PostgreSQL, Redis, etc.)
 
 Creates a new configuration from a template:
 - **Available templates**: 
@@ -322,14 +379,24 @@ Create `align.schema.json` to define validation rules:
     "required": false,
     "pattern": "^[a-zA-Z]+://.*$"
   },
-  "log_level": {
-    "type": "string",
-    "required": false,
-    "pattern": "^(debug|info|warn|error)$",
-    "default": "info"
+  "cors_origins": {
+    "type": "array",
+    "items": {
+      "type": "string"
+    },
+    "required": false
   }
 }
 ```
+
+#### When to Use Schema Validation
+Schema validation is useful for:
+- **Team projects** - Ensure consistent configuration across developers
+- **Production deployments** - Catch configuration errors before deployment
+- **Complex applications** - Validate required fields and data types
+- **Compliance requirements** - Enforce security and configuration standards
+
+**For simple projects**, you can skip schema validation and use basic validation instead.
 
 ### Schema Features
 - **Type validation**: string, number, boolean
