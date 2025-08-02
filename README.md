@@ -1,5 +1,8 @@
 # Align - Configuration Language & CLI
 
+[![npm version](https://badge.fury.io/js/align-config.svg)](https://badge.fury.io/js/align-config)
+[![npm downloads](https://img.shields.io/npm/dm/align-config.svg)](https://www.npmjs.com/package/align-config)
+
 Align is a domain-specific configuration language and toolchain designed to make application configuration safe, predictable, and unified across environments.
 
 ## 🎯 Purpose
@@ -17,6 +20,16 @@ Align provides critical security advantages:
 
 ## 🚀 Installation
 
+### Option 1: Install from npm (Recommended)
+```bash
+# Install globally for CLI access
+npm install -g align-config
+
+# Use the align command
+align --help
+```
+
+### Option 2: Install from source
 ```bash
 # Clone the repository
 git clone <repository-url>
@@ -52,6 +65,7 @@ auth_required = true
 debug = false
 port = 8080
 database_url = "postgresql://localhost:5432/myapp"
+cors_origins = ["http://localhost:3000", "https://myapp.com"]
 ```
 
 ### Nested Block Syntax
@@ -81,35 +95,30 @@ database "main" {
 - **Strings**: `"value"` or `value` (quotes optional)
 - **Numbers**: `3000`, `3.14`
 - **Booleans**: `true`, `false`
+- **Arrays**: `["item1", "item2"]` or `[1, 2, 3]`
 - **Comments**: `# comment` or `// comment`
 
 ## 🛠️ CLI Commands
 
+**Note**: After installing with `npm install -g align-config`, you can use `align` instead of `node index.js`.
+
 ### Initialize from Template
 ```bash
-# Node.js API configuration
+# Using npm installation
+align init --template=nodejs-api --app-name=myapp
+
+# Using source installation
 node index.js init --template=nodejs-api --app-name=myapp
 
-# Python API configuration
-node index.js init --template=python-api --app-name=myapp
-
-# Go API configuration
-node index.js init --template=go-api --app-name=myapp
-
-# React frontend configuration
-node index.js init --template=react-app --app-name=myapp
-
-# Next.js application configuration
-node index.js init --template=nextjs-app --app-name=myapp
-
-# Angular application configuration
-node index.js init --template=angular-app --app-name=myapp
-
-# Microservices configuration
-node index.js init --template=microservices --app-name=myapp
-
-# Database configuration
-node index.js init --template=database --app-name=myapp
+# Available templates:
+align init --template=nodejs-api --app-name=myapp
+align init --template=python-api --app-name=myapp
+align init --template=go-api --app-name=myapp
+align init --template=react-app --app-name=myapp
+align init --template=nextjs-app --app-name=myapp
+align init --template=angular-app --app-name=myapp
+align init --template=microservices --app-name=myapp
+align init --template=database --app-name=myapp
 ```
 
 Creates a new configuration from a template:
@@ -127,6 +136,12 @@ Creates a new configuration from a template:
 
 ### Validate Configuration
 ```bash
+# Using npm installation
+align validate config/base.align --base
+align validate config/dev.align
+align validate config/base.align --schema config/align.schema.json
+
+# Using source installation
 node index.js validate config/base.align --base
 node index.js validate config/dev.align
 node index.js validate config/base.align --schema config/align.schema.json
@@ -142,6 +157,11 @@ Validates a `.align` file for:
 
 ### Build Configuration
 ```bash
+# Using npm installation
+align build --env=dev --out=./output/config.dev.json
+align build --env=prod --format=yaml --out=./output/config.prod.yaml
+
+# Using source installation
 node index.js build --env=dev --out=./output/config.dev.json
 node index.js build --env=prod --format=yaml --out=./output/config.prod.yaml
 ```
@@ -161,6 +181,10 @@ Merges `base.align` and `<env>.align` files:
 
 ### Dry Run (Simulate Changes)
 ```bash
+# Using npm installation
+align dry-run --env=prod --key=auth_required --value=false
+
+# Using source installation
 node index.js dry-run --env=prod --key=auth_required --value=false
 ```
 
@@ -171,6 +195,10 @@ Simulates configuration changes without applying them:
 
 ### Explain (Trace Configuration)
 ```bash
+# Using npm installation
+align explain --key=timeout --env=prod
+
+# Using source installation
 node index.js explain --key=timeout --env=prod
 ```
 
@@ -181,6 +209,10 @@ Traces where a configuration value came from:
 
 ### Diff (Compare Environments)
 ```bash
+# Using npm installation
+align diff --env1=dev --env2=prod
+
+# Using source installation
 node index.js diff --env1=dev --env2=prod
 ```
 
@@ -191,6 +223,12 @@ Compares configurations between two environments:
 
 ### Smart Analysis
 ```bash
+# Using npm installation
+align analyze --config-dir=./config --env=prod
+align analyze --config-dir=./config --env=prod --detailed
+align analyze --config-dir=./config --env=prod --format=json
+
+# Using source installation
 node index.js analyze --config-dir=./config --env=prod
 node index.js analyze --config-dir=./config --env=prod --detailed
 node index.js analyze --config-dir=./config --env=prod --format=json
