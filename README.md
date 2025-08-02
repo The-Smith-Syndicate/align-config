@@ -86,8 +86,8 @@ For platforms that expect `.env` files (like Vercel), convert `.align` to `.env`
 ```json
 {
   "scripts": {
-    "build": "align build --env=production --out=./.env && next build",
-    "dev": "align build --env=development --out=./.env && next dev"
+    "build": "align build --env=production --format=env --out=./.env && next build",
+    "dev": "align build --env=development --format=env --out=./.env && next dev"
   }
 }
 ```
@@ -102,16 +102,30 @@ const config = align.load('production');
 
 // Convert to .env format
 const envContent = Object.entries(config)
-  .map(([key, value]) => `${key.toUpperCase()}=${value}`)
+  .map(([key, value]) => {
+    const envKey = key.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    if (typeof value === 'string') {
+      return `${envKey}="${value}"`;
+    } else if (typeof value === 'boolean') {
+      return `${envKey}=${value}`;
+    } else if (typeof value === 'number') {
+      return `${envKey}=${value}`;
+    } else if (Array.isArray(value)) {
+      return `${envKey}="${value.join(',')}"`;
+    } else {
+      return `${envKey}="${String(value)}"`;
+    }
+  })
   .join('\n');
 
 require('fs').writeFileSync('.env', envContent);
 ```
 
-**Option 3: Vercel Dashboard**
-- Build your config: `align build --env=production --out=./output/config.prod.json`
-- Copy values to Vercel's environment variables dashboard
-- Use Vercel's built-in environment variable management
+**Option 3: Direct .env Output**
+```bash
+# Generate .env file directly
+align build --env=production --format=env --out=./.env
+```
 
 ### Docker Integration
 ```dockerfile
@@ -122,7 +136,7 @@ RUN npm install
 COPY . .
 
 # Build config during image build
-RUN npx align-config build --env=production --out=./.env
+RUN npx align-config build --env=production --format=env --out=./.env
 
 CMD ["npm", "start"]
 ```
@@ -341,22 +355,52 @@ Validates a `.align` file for:
 # Using npm installation
 align build --env=dev --out=./output/config.dev.json
 align build --env=prod --format=yaml --out=./output/config.prod.yaml
+align build --env=prod --format=env --out=./.env
 
 # Using source installation
 node index.js build --env=dev --out=./output/config.dev.json
 node index.js build --env=prod --format=yaml --out=./output/config.prod.yaml
+node index.js build --env=prod --format=env --out=./.env
 ```
 
 Merges `base.align` and `<env>.align` files:
 - Loads `base.align` first
 - Applies `<env>.align` overrides
-- Outputs merged JSON or YAML configuration
+- Outputs merged JSON, YAML, or .env configuration
+
+#### Output Formats
+
+**JSON (default):**
+```json
+{
+  "app_name": "myapp",
+  "port": 3000,
+  "debug": true,
+  "database_url": "postgresql://localhost:5432/myapp_dev"
+}
+```
+
+**YAML:**
+```yaml
+app_name: myapp
+port: 3000
+debug: true
+database_url: postgresql://localhost:5432/myapp_dev
+```
+
+**Environment Variables (.env):**
+```bash
+APP_NAME="myapp"
+PORT=3000
+DEBUG=true
+DATABASE_URL="postgresql://localhost:5432/myapp_dev"
+```
 
 #### Options
 - `--env <environment>`: Environment name (required)
 - `--out <file>`: Output file path (default: `./output/config.json`)
 - `--config-dir <dir>`: Configuration directory (default: `./config`)
-- `--format <format>`: Output format (json, yaml) (default: json)
+- `--format <format>`: Output format (json, yaml, env) (default: json)
 - `--schema <file>`: Schema file path (align.schema.json)
 - `--k8s-configmap`: Generate Kubernetes ConfigMap YAML
 
@@ -618,6 +662,19 @@ $ node index.js build --env=dev --format=yaml --out=./output/config.dev.yaml
 📄 Output: C:\dev\align-config\output/config.dev.yaml
 📊 Keys: 7
 📋 Format: YAML
+🔄 Overridden keys: debug, port, database_url, log_level
+```
+
+### Build with .env output
+```bash
+$ node index.js build --env=dev --format=env --out=./output/config.dev.env
+📁 Loading base config: C:\dev\align-config\config\base.align
+📁 Loading environment config: C:\dev\align-config\config\dev.align
+🔄 Merging configurations...
+✅ Configuration built successfully!
+📄 Output: C:\dev\align-config\output/config.dev.env
+📊 Keys: 7
+📋 Format: ENV
 🔄 Overridden keys: debug, port, database_url, log_level
 ```
 

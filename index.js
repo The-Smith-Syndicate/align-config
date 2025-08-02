@@ -154,8 +154,8 @@ program
       const outPath = path.resolve(options.out);
 
       // Validate format
-      if (!['json', 'yaml'].includes(options.format)) {
-        console.error(chalk.red(`❌ Invalid format: ${options.format}. Supported: json, yaml`));
+      if (!['json', 'yaml', 'env'].includes(options.format)) {
+        console.error(chalk.red(`❌ Invalid format: ${options.format}. Supported: json, yaml, env`));
         process.exit(1);
       }
 
@@ -243,6 +243,28 @@ program
       if (options.format === 'yaml') {
         output = yaml.dump(mergedConfig, { indent: 2 });
         fileExtension = '.yaml';
+      } else if (options.format === 'env') {
+        // Convert to .env format
+        output = Object.entries(mergedConfig)
+          .map(([key, value]) => {
+            // Convert key to UPPER_CASE format
+            const envKey = key.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+            
+            // Handle different value types
+            if (typeof value === 'string') {
+              return `${envKey}="${value}"`;
+            } else if (typeof value === 'boolean') {
+              return `${envKey}=${value}`;
+            } else if (typeof value === 'number') {
+              return `${envKey}=${value}`;
+            } else if (Array.isArray(value)) {
+              return `${envKey}="${value.join(',')}"`;
+            } else {
+              return `${envKey}="${String(value)}"`;
+            }
+          })
+          .join('\n');
+        fileExtension = '.env';
       } else {
         output = JSON.stringify(mergedConfig, null, 2);
         fileExtension = '.json';
