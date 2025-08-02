@@ -3,7 +3,9 @@
 [![npm version](https://img.shields.io/npm/v/align-config.svg)](https://www.npmjs.com/package/align-config)
 [![npm downloads](https://img.shields.io/npm/dm/align-config.svg)](https://www.npmjs.com/package/align-config)
 
-**Align** is a domain-specific configuration language and toolchain that makes application configuration safe, predictable, and unified across environments. Replace scattered `.env`, YAML, JSON, and Kubernetes overrides with a single source of truth: `.align` files.
+**Align** is a domain-specific configuration language and toolchain that makes application configuration safe, predictable, 
+and unified across environments. Replace scattered `.env`, YAML, JSON, and Kubernetes overrides with a single source of 
+truth: `.align` files.
 
 ## 🚀 Quick Start
 
@@ -28,6 +30,123 @@ align analyze --config-dir=./config --env=dev
 
 **That's it!** You now have a working configuration system. 🎉
 
+## 🎯 What Problem Does Align Solve?
+
+### ❌ The Problem with .env Files:
+- **No validation** - typos break production
+- **No type safety** - everything is a string
+- **Manual environment management** - copy/paste between dev/prod
+- **No insights** - no way to catch security or performance issues
+- **Scattered configs** - .env, config.json, docker-compose.yml all over the place
+
+### ✅ The Align Solution:
+- **Type-safe configuration** - numbers are numbers, booleans are booleans
+- **Built-in validation** - catch errors before deployment
+- **Environment management** - clear dev/staging/prod separation
+- **Security analysis** - find weak secrets, missing SSL, etc.
+- **Performance insights** - identify caching, timeout, and optimization issues
+- **Single source of truth** - all configs in one organized system
+
+## 🎯 How Align Works
+
+### Step 1: Create Your Configuration
+```bash
+# Initialize with a template
+align init --template=nodejs-api --app-name=myapp
+```
+
+**This creates:**
+```
+myapp/
+├── config/
+│   ├── base.align          # Shared settings
+│   ├── dev.align           # Development overrides
+│   ├── prod.align          # Production overrides
+│   └── align.schema.json   # Validation rules
+└── output/                 # Generated configs go here
+```
+
+### Step 2: Customize Your Settings
+**Edit the generated files:**
+
+```align
+# config/base.align (shared across all environments)
+app_name = "myapp"
+port = 3000
+database_url = "postgresql://localhost:5432/myapp"
+jwt_secret = "your-super-secret-key-that-is-at-least-32-characters-long"
+```
+
+```align
+# config/dev.align (development overrides)
+debug = true
+log_level = "debug"
+database_url = "postgresql://localhost:5432/myapp_dev"
+```
+
+```align
+# config/prod.align (production overrides)
+debug = false
+log_level = "error"
+database_url = "postgresql://prod-db:5432/myapp_prod"
+```
+
+### Step 3: Validate Your Configuration
+```bash
+# Check for errors before deployment
+align validate config/base.align --base
+```
+
+**This catches:**
+- Missing required fields
+- Invalid data types
+- Schema violations
+- Security issues
+
+### Step 4: Build Your Configuration
+```bash
+# Generate config for development
+align build --env=dev --out=./output/config.dev.json
+
+# Generate config for production
+align build --env=prod --out=./output/config.prod.json
+```
+
+**This creates:**
+```json
+// output/config.dev.json
+{
+  "app_name": "myapp",
+  "port": 3000,
+  "debug": true,
+  "database_url": "postgresql://localhost:5432/myapp_dev",
+  "jwt_secret": "your-super-secret-key-that-is-at-least-32-characters-long"
+}
+```
+
+### Step 5: Use in Your Application
+```javascript
+// Instead of process.env everywhere
+const config = require('./output/config.dev.json');
+
+// Type-safe and validated!
+const port = config.port;        // 3000 (number, not string!)
+const debug = config.debug;       // true (boolean, not string!)
+const dbUrl = config.database_url; // Already validated
+```
+
+### Step 6: Deploy with Confidence
+```bash
+# For Vercel/Heroku (generates .env file)
+align build --env=prod --format=env --out=./.env
+
+# For Docker (JSON config)
+align build --env=prod --out=./config.json
+
+# For Kubernetes (ConfigMap)
+align build --env=prod --k8s-configmap --out=./configmap.yaml
+```
+
 ## 🎯 Common Use Cases
 
 ### For New Projects
@@ -39,33 +158,6 @@ align analyze --config-dir=./config --env=dev
 1. **Convert existing config** - Create `base.align` from your current config
 2. **Add environment overrides** - Create `dev.align`, `prod.align` for different environments
 3. **Validate everything** - `align validate config/base.align --base`
-
-#### Migrating from .env Files
-If you have existing `.env` files, convert them to `.align` format:
-
-**Before (.env):**
-```bash
-# .env
-DATABASE_URL=postgresql://localhost:5432/myapp
-PORT=8080
-DEBUG=true
-JWT_SECRET=my-secret-key
-```
-
-**After (base.align):**
-```align
-# base.align
-database_url = "postgresql://localhost:5432/myapp"
-port = 8080
-debug = true
-jwt_secret = "my-secret-key"
-```
-
-**Benefits of conversion:**
-- ✅ **Type safety** - numbers, booleans, strings are properly typed
-- ✅ **Validation** - catch errors before deployment
-- ✅ **Environment overrides** - `dev.align`, `prod.align` for different environments
-- ✅ **Schema validation** - enforce configuration rules
 
 ### For Teams
 1. **Add schema validation** - Create `align.schema.json` to enforce standards
@@ -92,36 +184,7 @@ For platforms that expect `.env` files (like Vercel), convert `.align` to `.env`
 }
 ```
 
-**Option 2: Custom Build Hook**
-```javascript
-// scripts/convert-align-to-env.js
-const { Align } = require('align-config');
-
-const align = new Align('./config');
-const config = align.load('production');
-
-// Convert to .env format
-const envContent = Object.entries(config)
-  .map(([key, value]) => {
-    const envKey = key.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
-    if (typeof value === 'string') {
-      return `${envKey}="${value}"`;
-    } else if (typeof value === 'boolean') {
-      return `${envKey}=${value}`;
-    } else if (typeof value === 'number') {
-      return `${envKey}=${value}`;
-    } else if (Array.isArray(value)) {
-      return `${envKey}="${value.join(',')}"`;
-    } else {
-      return `${envKey}="${String(value)}"`;
-    }
-  })
-  .join('\n');
-
-require('fs').writeFileSync('.env', envContent);
-```
-
-**Option 3: Direct .env Output**
+**Option 2: Direct .env Output**
 ```bash
 # Generate .env file directly
 align build --env=production --format=env --out=./.env
@@ -179,36 +242,34 @@ Replace all scattered config files with **`.align` files**:
 
 ## 🔒 Security Benefits
 
-Align provides critical security advantages:
-- **Configuration validation** prevents security misconfigurations
-- **Audit trail** for compliance and incident response
-- **Secure defaults** that can't be accidentally disabled
-- **Environment isolation** for sensitive data
-- **Change simulation** for safe security testing
-
-## 🚀 Installation
-
-### Option 1: Install from npm (Recommended)
+### **Built-in Security Analysis**
 ```bash
-# Install globally for CLI access
-npm install -g align-config
-
-# Use the align command
-align --help
+align analyze --env=prod
 ```
 
-### Option 2: Install from source
-```bash
-# Clone the repository
-git clone <repository-url>
-cd align-config
+**Finds security issues like:**
+- Weak JWT secrets
+- HTTP in production (should be HTTPS)
+- Missing rate limiting
+- Insecure database connections
+- Debug mode in production
 
-# Install dependencies
-npm install
-
-# Run directly with node
-node index.js --help
+### **Validation Prevents Security Mistakes**
+```json
+{
+  "jwt_secret": {
+    "type": "string",
+    "required": true,
+    "minLength": 32,
+    "pattern": "^[a-zA-Z0-9!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?]{32,}$"
+  }
+}
 ```
+
+**Catches:**
+- Short secrets
+- Weak patterns
+- Missing required security fields
 
 ## 📁 File Structure
 
@@ -317,17 +378,10 @@ Choose the template that matches your project type:
 - **`database`** - Database-focused applications (PostgreSQL, Redis, etc.)
 
 Creates a new configuration from a template:
-- **Available templates**: 
-  - `nodejs-api`: Node.js API with Express, JWT, and database
-  - `python-api`: Python API with FastAPI, authentication, and validation
-  - `go-api`: Go API with Gin, database, and monitoring
-  - `react-app`: React frontend with build optimization and analytics
-  - `nextjs-app`: Next.js with SSR, API routes, and image optimization
-  - `angular-app`: Angular with AOT compilation and service workers
-  - `microservices`: Distributed system with service discovery and tracing
-  - `database`: Database configuration with connection pooling and backup
-- **Customization**: Automatically sets app name
-- **Complete setup**: Creates base, dev, and prod configs with schema
+- Copies template files to your config directory
+- Replaces `app_name` placeholders with your app name
+- Sets up validation schema
+- Provides best practices for your project type
 
 ### Validate Configuration
 ```bash
@@ -601,32 +655,109 @@ Schema validation is useful for:
 **For simple projects**, you can skip schema validation and use basic validation instead.
 
 ### Schema Features
-- **Type validation**: string, number, boolean
-- **Required fields**: Ensure critical config is present
-- **Range validation**: min/max for numbers
-- **String validation**: minLength, maxLength, pattern
-- **Default values**: Provide fallback values
+
+**Type Validation:**
+```json
+{
+  "port": { "type": "number" },
+  "debug": { "type": "boolean" },
+  "name": { "type": "string" }
+}
+```
+
+**Required Fields:**
+```json
+{
+  "service_name": {
+    "type": "string",
+    "required": true
+  }
+}
+```
+
+**Value Ranges:**
+```json
+{
+  "port": {
+    "type": "number",
+    "min": 1,
+    "max": 65535
+  }
+}
+```
+
+**String Patterns:**
+```json
+{
+  "email": {
+    "type": "string",
+    "pattern": "^[^@]+@[^@]+\\.[^@]+$"
+  }
+}
+```
+
+**Array Validation:**
+```json
+{
+  "cors_origins": {
+    "type": "array",
+    "items": { "type": "string" },
+    "minLength": 1
+  }
+}
+```
+
+## 📚 Library Usage
+
+Use Align programmatically in your Node.js applications:
+
+```javascript
+const { Align } = require('align-config');
+
+// Initialize Align
+const align = new Align('./config');
+
+// Load configuration
+const config = align.load('dev');
+console.log(config.service_name); // "web"
+console.log(config.timeout); // 5000
+
+// Get metadata about the configuration
+const metadata = align.getMetadata('dev');
+console.log(metadata.environment); // "dev"
+console.log(metadata.overriddenKeys); // ['debug', 'port', ...]
+
+// Trace where a value came from
+const trace = align.explain('timeout', 'dev');
+console.log(trace.source); // "overridden"
+console.log(trace.finalValue); // 5000
+
+// Compare environments
+const diff = align.diff('dev', 'prod');
+console.log(diff.differences.length); // Number of differences
+```
 
 ## 🧪 Testing
 
 Align includes comprehensive testing:
 
+### Run Tests
 ```bash
 # Run all tests
 npm test
 
-# Run tests with coverage
-npm run test:coverage
-
 # Run tests in watch mode
 npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
 ```
 
 ### Test Coverage
-- **Parser tests**: Validate syntax parsing, type detection, nested blocks
-- **Library tests**: Test the Node.js API integration
-- **Integration tests**: Test CLI commands end-to-end
-- **Coverage**: 88%+ code coverage with 80%+ threshold
+- **Unit tests** - Parser, validator, merger
+- **Integration tests** - End-to-end CLI functionality
+- **Schema validation** - Type checking and rules
+- **Error handling** - Invalid inputs and edge cases
 
 ## 🔄 CI/CD Pipeline
 
@@ -742,70 +873,85 @@ $ node index.js diff --env1=dev --env2=prod
   prod: "error"
 ```
 
-## 📚 Library Usage
-
-Import Align directly into your Node.js applications:
-
-```javascript
-const Align = require('align-config');
-
-// Initialize with config directory
-const align = new Align('./config');
-
-// Load configuration for an environment
-const config = align.load('prod');
-console.log(config.service_name); // "web"
-console.log(config.timeout); // 5000
-
-// Validate a configuration file
-const errors = align.validate('./config/base.align', true); // true = isBaseConfig
-if (errors.length > 0) {
-  console.error('Validation failed:', errors);
-}
-
-// Get configuration metadata
-const metadata = align.getMetadata('prod');
-console.log(metadata.overriddenKeys); // ['debug', 'port', ...]
-
-// Trace configuration origin
-const trace = align.explain('timeout', 'prod');
-console.log(trace.source); // "overridden"
-console.log(trace.finalValue); // 5000
-
-// Compare environments
-const diff = align.diff('dev', 'prod');
-console.log(diff.differences.length); // Number of differences
-```
-
-## 🎯 Philosophy
-
-Align is a **config compiler**, not an app runner. It focuses on:
-- **Simplicity**: Flat key-value syntax with optional nested blocks
-- **Safety**: Validation and type checking with schema support
-- **Predictability**: Clear override behavior and traceability
-- **Flexibility**: JSON and YAML output, library integration
-- **Security**: Configuration validation and audit trails
-
 ## 🔮 Features
 
-### ✅ Implemented
-- Parse/validate flat .align files
-- Merge base + env files
-- Output JSON and YAML
-- Track overridden keys
-- Dry-run simulation
-- Explain tracing
-- Schema validation
-- Nested block syntax
-- Environment comparison (diff)
-- Library API for direct import
-- Configuration templates (8 templates: Node.js, Python, Go, React, Next.js, Angular, Microservices, Database)
-- Kubernetes ConfigMap generation
-- Comprehensive testing suite
-- CI/CD pipeline with GitHub Actions
+### Core Features
+- ✅ **Configuration Language** - Custom `.align` syntax
+- ✅ **Type Safety** - Numbers, booleans, strings, arrays
+- ✅ **Environment Management** - Base + environment overrides
+- ✅ **Validation** - Schema-driven validation rules
+- ✅ **Analysis** - Security and performance insights
+- ✅ **Templates** - 8 project templates with best practices
 
-### 🟡 Future Enhancements
-- AI-powered config explanation
-- More complex validation rules
-- Configuration templates
-- Integration with CI/CD pipelines 
+### Output Formats
+- ✅ **JSON** - Universal format for applications
+- ✅ **YAML** - Infrastructure standard (Kubernetes, Docker)
+- ✅ **Environment Variables** - Platform compatibility (Vercel, Heroku)
+
+### Platform Integration
+- ✅ **Vercel** - Generate `.env` files for deployment
+- ✅ **Heroku** - Environment variable compatibility
+- ✅ **Docker** - Build-time configuration
+- ✅ **Kubernetes** - ConfigMap generation
+- ✅ **Any Platform** - JSON/YAML/.env output
+
+### Developer Experience
+- ✅ **CLI Tool** - Easy command-line interface
+- ✅ **Library API** - Programmatic usage in Node.js
+- ✅ **Templates** - Quick project setup
+- ✅ **Validation** - Catch errors before deployment
+- ✅ **Analysis** - Security and performance insights
+
+### Team Features
+- ✅ **Schema Validation** - Enforce team standards
+- ✅ **Environment Management** - Clear dev/staging/prod separation
+- ✅ **Traceability** - See where config values come from
+- ✅ **Dry Run** - Test changes before applying
+- ✅ **Diff Tool** - Compare environments
+
+## 🚀 Installation
+
+### Option 1: Install from npm (Recommended)
+```bash
+# Install globally for CLI access
+npm install -g align-config
+
+# Use the align command
+align --help
+```
+
+### Option 2: Install from source
+```bash
+# Clone the repository
+git clone <repository-url>
+cd align-config
+
+# Install dependencies
+npm install
+
+# Run directly with node
+node index.js --help
+```
+
+## 📄 License
+
+ISC License - see LICENSE file for details.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Run the test suite
+6. Submit a pull request
+
+## 📞 Support
+
+- **Issues**: Report bugs on GitHub
+- **Documentation**: Check the README and examples
+- **Questions**: Open a GitHub discussion
+
+---
+
+**Align** - Making configuration safe, predictable, and unified across environments. 🚀 
