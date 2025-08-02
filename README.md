@@ -77,6 +77,65 @@ jwt_secret = "my-secret-key"
 2. **Generate Kubernetes ConfigMaps** - `align build --env=prod --k8s-configmap`
 3. **Compare environments** - `align diff --env1=dev --env2=prod` to verify changes
 
+## 🚀 Deployment Integration
+
+### Vercel Integration
+For platforms that expect `.env` files (like Vercel), convert `.align` to `.env`:
+
+**Option 1: Build Script Integration**
+```json
+{
+  "scripts": {
+    "build": "align build --env=production --out=./.env && next build",
+    "dev": "align build --env=development --out=./.env && next dev"
+  }
+}
+```
+
+**Option 2: Custom Build Hook**
+```javascript
+// scripts/convert-align-to-env.js
+const { Align } = require('align-config');
+
+const align = new Align('./config');
+const config = align.load('production');
+
+// Convert to .env format
+const envContent = Object.entries(config)
+  .map(([key, value]) => `${key.toUpperCase()}=${value}`)
+  .join('\n');
+
+require('fs').writeFileSync('.env', envContent);
+```
+
+**Option 3: Vercel Dashboard**
+- Build your config: `align build --env=production --out=./output/config.prod.json`
+- Copy values to Vercel's environment variables dashboard
+- Use Vercel's built-in environment variable management
+
+### Docker Integration
+```dockerfile
+# Dockerfile
+FROM node:18-alpine
+COPY package*.json ./
+RUN npm install
+COPY . .
+
+# Build config during image build
+RUN npx align-config build --env=production --out=./.env
+
+CMD ["npm", "start"]
+```
+
+### Kubernetes Integration
+```bash
+# Generate ConfigMap from .align files
+align build --env=production --k8s-configmap --out=./k8s/configmap.yaml
+
+# Apply to cluster
+kubectl apply -f ./k8s/configmap.yaml
+```
+
 ## 🎯 Purpose
 
 **Align** is a domain-specific configuration language and toolchain that makes application configuration safe, predictable, and unified across environments. 
