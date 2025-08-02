@@ -7,6 +7,12 @@ output/*.configmap.yaml
 # But keep the directory structure
 !output/.gitkeep
 
+# Test directories and files
+test-*/
+test_*/
+*-test/
+test-array/
+
 # Generated manifests in examples
 examples/*/manifests/
 examples/*/examples/
@@ -47,9 +53,11 @@ Thumbs.db
 
 # Coverage reports
 coverage/
+!coverage/.gitkeep
 
 # Test outputs
 test-output/
+!test-output/.gitkeep
 
 # Generated configuration files
 *.config.local

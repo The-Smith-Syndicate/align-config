@@ -1,3 +1,0 @@
-# This file ensures the output directory is tracked in git
-# Generated files (*.json, *.yaml, *.yml) are ignored by .gitignore
-# but the directory structure is preserved for users 
