@@ -1,0 +1,134 @@
+name: Align Configuration Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-config:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install Align
+      run: npm install -g align-config
+    
+    - name: Validate base configuration
+      run: align validate config/base.align --base
+    
+    - name: Validate environment configurations
+      run: |
+        align validate config/dev.align
+        align validate config/prod.align
+    
+    - name: Build configurations
+      run: |
+        align build --env=dev --out=./output/config.dev.json
+        align build --env=prod --out=./output/config.prod.json
+    
+    - name: Upload configuration artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: config-artifacts
+        path: output/
+
+  security-audit:
+    runs-on: ubuntu-latest
+    needs: validate-config
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install Align
+      run: npm install -g align-config
+    
+    - name: Security audit - Check for sensitive data
+      run: |
+        # Check for hardcoded secrets
+        align explain --key=db_password --env=prod
+        align explain --key=api_key --env=prod
+        
+        # Validate security settings
+        align validate config/prod.align --schema security.schema.json
+    
+    - name: Security audit - Environment isolation
+      run: |
+        # Ensure dev and prod have different settings
+        align diff --env1=dev --env2=prod | grep -E "(password|secret|key)" || echo "✅ No sensitive data differences found"
+
+  deploy-dev:
+    runs-on: ubuntu-latest
+    needs: [validate-config, security-audit]
+    if: github.ref == 'refs/heads/develop'
+    environment: development
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install Align
+      run: npm install -g align-config
+    
+    - name: Build dev configuration
+      run: align build --env=dev --format=yaml --out=./deploy/config.dev.yaml
+    
+    - name: Deploy to development
+      run: |
+        echo "🚀 Deploying with configuration:"
+        cat ./deploy/config.dev.yaml
+        # Add your deployment commands here
+        # kubectl apply -f ./deploy/config.dev.yaml
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: [validate-config, security-audit]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install Align
+      run: npm install -g align-config
+    
+    - name: Dry run production changes
+      run: |
+        # Simulate production deployment
+        align dry-run --env=prod --key=replicas --value=5
+        align dry-run --env=prod --key=ssl_enabled --value=true
+    
+    - name: Build production configuration
+      run: align build --env=prod --format=yaml --out=./deploy/config.prod.yaml
+    
+    - name: Deploy to production
+      run: |
+        echo "🚀 Deploying to production with configuration:"
+        cat ./deploy/config.prod.yaml
+        # Add your production deployment commands here
+        # kubectl apply -f ./deploy/config.prod.yaml 

@@ -1,0 +1,86 @@
+# Microservices Template - Base Configuration
+app_name = "microservices-app"
+version = "1.0.0"
+
+# Service Discovery
+service_discovery_enabled = true
+service_discovery_type = "consul"
+service_discovery_host = "localhost"
+service_discovery_port = 8500
+service_discovery_ttl = 30
+
+# Message Queue
+message_queue_enabled = true
+message_queue_type = "redis"
+message_queue_host = "localhost"
+message_queue_port = 6379
+message_queue_password = ""
+message_queue_db = 0
+
+# Circuit Breaker
+circuit_breaker_enabled = true
+circuit_breaker_threshold = 5
+circuit_breaker_timeout = 60
+circuit_breaker_fallback_enabled = true
+
+# Load Balancing
+load_balancer_enabled = true
+load_balancer_type = "round_robin"
+load_balancer_health_check_interval = 30
+load_balancer_health_check_timeout = 5
+
+# Distributed Tracing
+tracing_enabled = true
+tracing_type = "jaeger"
+tracing_host = "localhost"
+tracing_port = 14268
+tracing_sampling_rate = 0.1
+
+# Database Configuration
+database_url = "postgresql://localhost:5432/myapp"
+database_max_connections = 25
+database_max_idle_connections = 5
+database_connection_timeout = 5
+database_query_timeout = 30
+
+# Cache Configuration
+cache_enabled = true
+cache_type = "redis"
+cache_host = "localhost"
+cache_port = 6379
+cache_ttl = 3600
+
+# API Gateway
+api_gateway_enabled = true
+api_gateway_port = 8080
+api_gateway_rate_limit = 100
+api_gateway_timeout = 30
+
+# Monitoring
+monitoring_enabled = true
+monitoring_type = "prometheus"
+monitoring_port = 9090
+monitoring_metrics_path = "/metrics"
+
+# Logging
+logging_enabled = true
+logging_level = "info"
+logging_format = "json"
+logging_output = "stdout"
+
+# Security
+security_enabled = true
+jwt_secret = "your-super-secret-jwt-key-that-is-at-least-32-characters-long"
+jwt_expires_in = "24h"
+cors_enabled = true
+cors_origins = ["http://localhost:3000"]
+
+# Health Checks
+health_check_enabled = true
+health_check_interval = 30
+health_check_timeout = 5
+health_check_path = "/health"
+
+# Graceful Shutdown
+shutdown_timeout = 30
+shutdown_grace_period = 10 

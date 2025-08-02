@@ -1,0 +1,17 @@
+# Development overrides
+replicas = 1
+image = "myapp:dev"
+
+# Lower resource limits for dev
+resources_cpu_limit = "200m"
+resources_memory_limit = "256Mi"
+resources_cpu_request = "100m"
+resources_memory_request = "128Mi"
+
+# Development-specific settings
+service_type = "NodePort"
+service_port = 30080
+
+# Debug settings
+debug_enabled = true
+log_level = "debug" 

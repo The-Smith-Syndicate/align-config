@@ -1,0 +1,27 @@
+# Production overrides
+replicas = 5
+image = "myapp:v1.2.3"
+
+# Higher resource limits for prod
+resources_cpu_limit = "1000m"
+resources_memory_limit = "1Gi"
+resources_cpu_request = "500m"
+resources_memory_request = "512Mi"
+
+# Production security
+security_context_run_as_user = 999
+security_context_run_as_group = 999
+security_context_fs_group = 999
+
+# Production networking
+service_type = "LoadBalancer"
+service_port = 443
+
+# Production storage
+persistent_volume_enabled = true
+storage_class = "fast-ssd"
+volume_size = "10Gi"
+
+# Production monitoring
+log_level = "info"
+monitoring_enabled = true 

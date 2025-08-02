@@ -1,0 +1,22 @@
+# Production overrides
+app_image = "myapp:v1.2.3"
+app_port = 8080
+app_environment = "production"
+
+# Production database
+db_image = "postgres:13"
+db_port = 5432
+db_name = "myapp_prod"
+db_user = "prod_user"
+db_password = "prod_password"
+
+# Production Redis
+redis_port = 6379
+
+# Production volumes
+app_data_volume = "./prod-data"
+db_data_volume = "./prod-db-data"
+redis_data_volume = "./prod-redis-data"
+
+# Production networking
+nginx_port = 443 

@@ -1,0 +1,65 @@
+# Production Environment Overrides
+service_discovery_host = "consul.service.internal"
+service_discovery_port = 8500
+service_discovery_ttl = 30
+
+# Production Message Queue
+message_queue_host = "redis.service.internal"
+message_queue_port = 6379
+message_queue_password = "prod-redis-password"
+message_queue_db = 0
+
+# Production Circuit Breaker
+circuit_breaker_threshold = 10
+circuit_breaker_timeout = 120
+circuit_breaker_fallback_enabled = true
+
+# Production Load Balancing
+load_balancer_health_check_interval = 30
+load_balancer_health_check_timeout = 5
+
+# Production Distributed Tracing
+tracing_enabled = true
+tracing_host = "jaeger.service.internal"
+tracing_port = 14268
+tracing_sampling_rate = 0.1
+
+# Production Database
+database_host = "postgres.service.internal"
+database_port = 5432
+database_name = "myapp_prod"
+database_user = "prod_user"
+database_password = "prod-password"
+database_max_connections = 50
+database_max_idle_connections = 10
+database_connection_timeout = 10
+database_query_timeout = 60
+
+# Production Cache
+cache_host = "redis.service.internal"
+cache_port = 6379
+cache_ttl = 7200
+
+# Production API Gateway
+api_gateway_port = 80
+api_gateway_rate_limit = 50
+api_gateway_timeout = 30
+
+# Production Monitoring
+monitoring_port = 9090
+
+# Production Logging
+logging_level = "warn"
+logging_format = "json"
+logging_output = "stdout"
+
+# Production Security
+cors_origins = ["https://myapp.com", "https://api.myapp.com"]
+
+# Production Health Checks
+health_check_interval = 30
+health_check_timeout = 5
+
+# Production Shutdown
+shutdown_timeout = 30
+shutdown_grace_period = 10 

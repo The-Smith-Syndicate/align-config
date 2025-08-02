@@ -1,0 +1,55 @@
+# Production Environment Overrides
+port = 80
+source_map = false
+minify = true
+gzip = true
+aot_enabled = true
+
+# Production API
+api_base_url = "https://api.myapp.com"
+api_timeout = 15000
+api_retry_attempts = 2
+api_retry_delay = 500
+
+# Production Angular
+angular_strict_mode = true
+angular_es5_enabled = true
+
+# Production Build Optimizations
+build_optimizer_enabled = true
+named_chunks_enabled = true
+vendor_chunk_enabled = true
+common_chunk_enabled = true
+
+# Production Service Worker
+service_worker_enabled = true
+service_worker_scope = "/"
+service_worker_update_mode = "immediate"
+
+# Production Testing
+testing_enabled = false
+testing_coverage_enabled = false
+
+# Production Performance
+lazy_loading_enabled = true
+preload_strategy = "PreloadAllModules"
+prefetch_strategy = "PrefetchAllModules"
+
+# Production Security
+csp_enabled = true
+csp_report_only = false
+csp_report_uri = "https://myapp.com/csp-report"
+
+# Production Analytics
+analytics_enabled = true
+analytics_id = "prod-analytics-id"
+analytics_debug = false
+
+# Production Error Tracking
+error_tracking_enabled = true
+error_tracking_dsn = "prod-error-tracking-dsn"
+error_tracking_environment = "production"
+
+# Production Tools
+dev_tools_enabled = false
+hot_reload_enabled = false 

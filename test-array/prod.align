@@ -1,0 +1,48 @@
+# Production Environment Overrides
+public_url = "https://myapp.com"
+build_path = "build"
+source_map = false
+minify = true
+gzip = true
+
+# Production API
+api_base_url = "https://api.myapp.com"
+api_timeout = 15000
+api_retry_attempts = 2
+api_retry_delay = 500
+
+# Production Feature Flags
+feature_flags_enabled = true
+feature_flags_api_url = "https://api.myapp.com/features"
+
+# Production Analytics
+analytics_enabled = true
+analytics_id = "prod-analytics-id"
+analytics_debug = false
+analytics_track_page_views = true
+analytics_track_events = true
+
+# Production CDN
+cdn_enabled = true
+cdn_base_url = "https://cdn.myapp.com"
+cdn_version = "v1.2.3"
+
+# Production Performance
+lazy_loading_enabled = true
+code_splitting_enabled = true
+preload_critical_chunks = true
+service_worker_enabled = true
+
+# Production Security
+csp_enabled = true
+csp_report_only = false
+csp_report_uri = "https://myapp.com/csp-report"
+
+# Production Error Tracking
+error_tracking_enabled = true
+error_tracking_dsn = "prod-error-tracking-dsn"
+error_tracking_environment = "production"
+
+# Production Tools
+dev_tools_enabled = false
+hot_reload_enabled = false 

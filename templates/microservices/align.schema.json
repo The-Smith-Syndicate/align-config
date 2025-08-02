@@ -1,0 +1,357 @@
+{
+  "app_name": {
+    "type": "string",
+    "required": true,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "version": {
+    "type": "string",
+    "required": true,
+    "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+  },
+  "service_discovery_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "service_discovery_type": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(consul|etcd|zookeeper)$",
+    "default": "consul"
+  },
+  "service_discovery_host": {
+    "type": "string",
+    "required": false,
+    "default": "localhost"
+  },
+  "service_discovery_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 8500
+  },
+  "service_discovery_ttl": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "message_queue_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "message_queue_type": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(redis|rabbitmq|kafka)$",
+    "default": "redis"
+  },
+  "message_queue_host": {
+    "type": "string",
+    "required": false,
+    "default": "localhost"
+  },
+  "message_queue_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 6379
+  },
+  "message_queue_password": {
+    "type": "string",
+    "required": false
+  },
+  "message_queue_db": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 15,
+    "default": 0
+  },
+  "circuit_breaker_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "circuit_breaker_threshold": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 100,
+    "default": 5
+  },
+  "circuit_breaker_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 600,
+    "default": 60
+  },
+  "circuit_breaker_fallback_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "load_balancer_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "load_balancer_type": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(round_robin|least_connections|ip_hash)$",
+    "default": "round_robin"
+  },
+  "load_balancer_health_check_interval": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "load_balancer_health_check_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 60,
+    "default": 5
+  },
+  "tracing_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "tracing_type": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(jaeger|zipkin|opentelemetry)$",
+    "default": "jaeger"
+  },
+  "tracing_host": {
+    "type": "string",
+    "required": false,
+    "default": "localhost"
+  },
+  "tracing_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 14268
+  },
+  "tracing_sampling_rate": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 1,
+    "default": 0.1
+  },
+  "database_url": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[a-zA-Z]+://.*$"
+  },
+  "database_max_connections": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 100,
+    "default": 25
+  },
+  "database_max_idle_connections": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 50,
+    "default": 5
+  },
+  "database_connection_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 60,
+    "default": 5
+  },
+  "database_query_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "cache_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "cache_type": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(redis|memcached)$",
+    "default": "redis"
+  },
+  "cache_host": {
+    "type": "string",
+    "required": false,
+    "default": "localhost"
+  },
+  "cache_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 6379
+  },
+  "cache_ttl": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 86400,
+    "default": 3600
+  },
+  "api_gateway_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "api_gateway_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 8080
+  },
+  "api_gateway_rate_limit": {
+    "type": "number",
+    "required": false,
+    "min": 10,
+    "max": 10000,
+    "default": 100
+  },
+  "api_gateway_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "monitoring_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "monitoring_type": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(prometheus|grafana)$",
+    "default": "prometheus"
+  },
+  "monitoring_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 9090
+  },
+  "monitoring_metrics_path": {
+    "type": "string",
+    "required": false,
+    "default": "/metrics"
+  },
+  "logging_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "logging_level": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(debug|info|warn|error)$",
+    "default": "info"
+  },
+  "logging_format": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(json|text|pretty)$",
+    "default": "json"
+  },
+  "logging_output": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(stdout|stderr|file)$",
+    "default": "stdout"
+  },
+  "security_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "jwt_secret": {
+    "type": "string",
+    "required": false,
+    "minLength": 32,
+    "maxLength": 256
+  },
+  "jwt_expires_in": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[0-9]+[smhd]$"
+  },
+  "cors_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "cors_origins": {
+    "type": "array",
+    "required": false,
+    "items": {
+      "type": "string"
+    }
+  },
+  "health_check_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "health_check_interval": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "health_check_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 60,
+    "default": 5
+  },
+  "health_check_path": {
+    "type": "string",
+    "required": false,
+    "default": "/health"
+  },
+  "shutdown_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "shutdown_grace_period": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 60,
+    "default": 10
+  }
+} 

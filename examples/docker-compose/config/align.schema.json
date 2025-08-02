@@ -1,0 +1,103 @@
+{
+  "app_name": {
+    "type": "string",
+    "required": true,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "version": {
+    "type": "string",
+    "required": true,
+    "pattern": "^[0-9]+\\.[0-9]+$"
+  },
+  "app_image": {
+    "type": "string",
+    "required": true,
+    "pattern": "^[a-zA-Z0-9._/-]+:[a-zA-Z0-9._/-]*$"
+  },
+  "app_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535
+  },
+  "app_environment": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(development|production|staging)$"
+  },
+  "db_image": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[a-zA-Z0-9._/-]+:[a-zA-Z0-9._/-]*$"
+  },
+  "db_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535
+  },
+  "db_name": {
+    "type": "string",
+    "required": false,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "db_user": {
+    "type": "string",
+    "required": false,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "db_password": {
+    "type": "string",
+    "required": false,
+    "minLength": 1,
+    "maxLength": 100
+  },
+  "redis_image": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[a-zA-Z0-9._/-]+:[a-zA-Z0-9._/-]*$"
+  },
+  "redis_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535
+  },
+  "nginx_image": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[a-zA-Z0-9._/-]+:[a-zA-Z0-9._/-]*$"
+  },
+  "nginx_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535
+  },
+  "app_data_volume": {
+    "type": "string",
+    "required": false
+  },
+  "db_data_volume": {
+    "type": "string",
+    "required": false
+  },
+  "redis_data_volume": {
+    "type": "string",
+    "required": false
+  },
+  "network_name": {
+    "type": "string",
+    "required": false,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "network_driver": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(bridge|host|none)$"
+  }
+} 

@@ -1,0 +1,32 @@
+# Base configuration for Docker Compose
+app_name = "myapp"
+version = "3.8"
+
+# Application service
+app_image = "myapp:latest"
+app_port = 8080
+app_environment = "production"
+
+# Database service
+db_image = "postgres:13"
+db_port = 5432
+db_name = "myapp"
+db_user = "postgres"
+db_password = "changeme"
+
+# Redis service
+redis_image = "redis:6-alpine"
+redis_port = 6379
+
+# Nginx service
+nginx_image = "nginx:alpine"
+nginx_port = 80
+
+# Volumes
+app_data_volume = "./data"
+db_data_volume = "./db-data"
+redis_data_volume = "./redis-data"
+
+# Networks
+network_name = "myapp-network"
+network_driver = "bridge" 

@@ -1,0 +1,62 @@
+# Development Environment Overrides
+service_discovery_host = "localhost"
+service_discovery_port = 8500
+service_discovery_ttl = 10
+
+# Development Message Queue
+message_queue_host = "localhost"
+message_queue_port = 6379
+message_queue_password = ""
+
+# Development Circuit Breaker
+circuit_breaker_threshold = 3
+circuit_breaker_timeout = 30
+circuit_breaker_fallback_enabled = true
+
+# Development Load Balancing
+load_balancer_health_check_interval = 10
+load_balancer_health_check_timeout = 3
+
+# Development Distributed Tracing
+tracing_enabled = true
+tracing_host = "localhost"
+tracing_port = 14268
+tracing_sampling_rate = 1.0
+
+# Development Database
+database_host = "localhost"
+database_port = 5432
+database_name = "myapp_dev"
+database_user = "dev_user"
+database_password = "dev_password"
+database_max_connections = 10
+database_max_idle_connections = 2
+
+# Development Cache
+cache_host = "localhost"
+cache_port = 6379
+cache_ttl = 60
+
+# Development API Gateway
+api_gateway_port = 8080
+api_gateway_rate_limit = 1000
+api_gateway_timeout = 60
+
+# Development Monitoring
+monitoring_port = 9090
+
+# Development Logging
+logging_level = "debug"
+logging_format = "text"
+logging_output = "stdout"
+
+# Development Security
+cors_origins = ["http://localhost:3000", "http://localhost:8080"]
+
+# Development Health Checks
+health_check_interval = 10
+health_check_timeout = 3
+
+# Development Shutdown
+shutdown_timeout = 10
+shutdown_grace_period = 5 

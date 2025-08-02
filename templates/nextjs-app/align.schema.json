@@ -1,0 +1,239 @@
+{
+  "app_name": {
+    "type": "string",
+    "required": true,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "version": {
+    "type": "string",
+    "required": true,
+    "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+  },
+  "port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 3000
+  },
+  "host": {
+    "type": "string",
+    "required": false,
+    "default": "0.0.0.0"
+  },
+  "server_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "build_path": {
+    "type": "string",
+    "required": false,
+    "default": ".next"
+  },
+  "source_map": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "minify": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "gzip": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "static_export": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "api_base_url": {
+    "type": "string",
+    "required": false,
+    "pattern": "^https?://.*$"
+  },
+  "api_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1000,
+    "max": 300000,
+    "default": 30000
+  },
+  "api_retry_attempts": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 10,
+    "default": 3
+  },
+  "api_retry_delay": {
+    "type": "number",
+    "required": false,
+    "min": 100,
+    "max": 10000,
+    "default": 1000
+  },
+  "ssr_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "ssr_cache_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "ssr_cache_ttl": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 86400,
+    "default": 3600
+  },
+  "ssr_revalidate": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 86400,
+    "default": 60
+  },
+  "static_generation_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "static_generation_fallback": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "static_generation_revalidate": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 86400,
+    "default": 3600
+  },
+  "image_optimization_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "image_domains": {
+    "type": "string",
+    "required": false
+  },
+  "image_sizes": {
+    "type": "string",
+    "required": false
+  },
+  "image_formats": {
+    "type": "string",
+    "required": false
+  },
+  "i18n_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "i18n_default_locale": {
+    "type": "string",
+    "required": false,
+    "default": "en"
+  },
+  "i18n_supported_locales": {
+    "type": "string",
+    "required": false
+  },
+  "i18n_domains": {
+    "type": "string",
+    "required": false
+  },
+  "lazy_loading_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "code_splitting_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "preload_critical_chunks": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "service_worker_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "csp_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "csp_report_only": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "csp_report_uri": {
+    "type": "string",
+    "required": false,
+    "pattern": "^https?://.*$"
+  },
+  "analytics_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "analytics_id": {
+    "type": "string",
+    "required": false
+  },
+  "analytics_debug": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "error_tracking_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "error_tracking_dsn": {
+    "type": "string",
+    "required": false
+  },
+  "error_tracking_environment": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(development|staging|production)$"
+  },
+  "dev_tools_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "dev_tools_port": {
+    "type": "number",
+    "required": false,
+    "min": 1024,
+    "max": 65535,
+    "default": 3001
+  },
+  "hot_reload_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  }
+} 

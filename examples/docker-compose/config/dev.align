@@ -1,0 +1,22 @@
+# Development overrides
+app_image = "myapp:dev"
+app_port = 3000
+app_environment = "development"
+
+# Development database
+db_image = "postgres:13"
+db_port = 5433
+db_name = "myapp_dev"
+db_user = "dev_user"
+db_password = "dev_password"
+
+# Development Redis
+redis_port = 6380
+
+# Development volumes
+app_data_volume = "./dev-data"
+db_data_volume = "./dev-db-data"
+redis_data_volume = "./dev-redis-data"
+
+# Development networking
+nginx_port = 8080 

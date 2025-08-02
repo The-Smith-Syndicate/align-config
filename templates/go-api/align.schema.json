@@ -1,0 +1,253 @@
+{
+  "app_name": {
+    "type": "string",
+    "required": true,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "version": {
+    "type": "string",
+    "required": true,
+    "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+  },
+  "port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 8080
+  },
+  "host": {
+    "type": "string",
+    "required": false,
+    "default": "0.0.0.0"
+  },
+  "read_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "write_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "idle_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 600,
+    "default": 60
+  },
+  "database_url": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[a-zA-Z]+://.*$"
+  },
+  "database_max_connections": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 100,
+    "default": 25
+  },
+  "database_max_idle_connections": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 50,
+    "default": 5
+  },
+  "database_connection_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 60,
+    "default": 5
+  },
+  "database_query_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "jwt_secret": {
+    "type": "string",
+    "required": false,
+    "minLength": 32,
+    "maxLength": 256
+  },
+  "jwt_expires_in": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[0-9]+[smhd]$"
+  },
+  "bcrypt_cost": {
+    "type": "number",
+    "required": false,
+    "min": 8,
+    "max": 16,
+    "default": 12
+  },
+  "log_level": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(debug|info|warn|error)$",
+    "default": "info"
+  },
+  "log_format": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(json|text|pretty)$",
+    "default": "json"
+  },
+  "log_file": {
+    "type": "string",
+    "required": false
+  },
+  "log_max_size": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 1000,
+    "default": 100
+  },
+  "log_max_age": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 365,
+    "default": 30
+  },
+  "log_max_backups": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 100,
+    "default": 10
+  },
+  "cors_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "cors_origins": {
+    "type": "array",
+    "required": false,
+    "items": {
+      "type": "string"
+    }
+  },
+  "cors_credentials": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "rate_limit_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "rate_limit_window": {
+    "type": "number",
+    "required": false,
+    "min": 60,
+    "max": 3600,
+    "default": 900
+  },
+  "rate_limit_max": {
+    "type": "number",
+    "required": false,
+    "min": 10,
+    "max": 10000,
+    "default": 100
+  },
+  "trusted_proxies": {
+    "type": "string",
+    "required": false
+  },
+  "health_check_path": {
+    "type": "string",
+    "required": false,
+    "default": "/health"
+  },
+  "metrics_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "metrics_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 9090
+  },
+  "metrics_path": {
+    "type": "string",
+    "required": false,
+    "default": "/metrics"
+  },
+  "tracing_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "tracing_endpoint": {
+    "type": "string",
+    "required": false,
+    "pattern": "^https?://.*$"
+  },
+  "redis_url": {
+    "type": "string",
+    "required": false,
+    "pattern": "^redis://.*$"
+  },
+  "redis_pool_size": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 100,
+    "default": 10
+  },
+  "cache_ttl": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 86400,
+    "default": 3600
+  },
+  "api_version": {
+    "type": "string",
+    "required": false,
+    "pattern": "^v[0-9]+$",
+    "default": "v1"
+  },
+  "api_prefix": {
+    "type": "string",
+    "required": false,
+    "default": "/api"
+  },
+  "swagger_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "swagger_path": {
+    "type": "string",
+    "required": false,
+    "default": "/swagger/*"
+  },
+  "shutdown_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  }
+} 

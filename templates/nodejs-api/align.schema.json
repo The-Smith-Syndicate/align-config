@@ -1,0 +1,150 @@
+{
+  "app_name": {
+    "type": "string",
+    "required": true,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "version": {
+    "type": "string",
+    "required": true,
+    "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+  },
+  "port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 3000
+  },
+  "host": {
+    "type": "string",
+    "required": false,
+    "default": "0.0.0.0"
+  },
+  "timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1000,
+    "max": 300000,
+    "default": 30000
+  },
+  "body_limit": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[0-9]+[KMGTPEZYkmgtpezy]i?$|^[0-9]+[kmgtpezy]b$"
+  },
+  "database_url": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[a-zA-Z]+://.*$"
+  },
+  "database_pool_size": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 100,
+    "default": 10
+  },
+  "database_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1000,
+    "max": 30000,
+    "default": 5000
+  },
+  "jwt_secret": {
+    "type": "string",
+    "required": false,
+    "minLength": 32,
+    "maxLength": 256
+  },
+  "jwt_expires_in": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[0-9]+[smhd]$"
+  },
+  "bcrypt_rounds": {
+    "type": "number",
+    "required": false,
+    "min": 8,
+    "max": 16,
+    "default": 12
+  },
+  "log_level": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(debug|info|warn|error)$",
+    "default": "info"
+  },
+  "log_format": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(json|pretty|simple)$",
+    "default": "json"
+  },
+  "log_file": {
+    "type": "string",
+    "required": false
+  },
+  "cors_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "cors_origins": {
+    "type": "array",
+    "required": false,
+    "items": {
+      "type": "string"
+    }
+  },
+  "rate_limit_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "rate_limit_window": {
+    "type": "number",
+    "required": false,
+    "min": 60000,
+    "max": 3600000,
+    "default": 900000
+  },
+  "rate_limit_max": {
+    "type": "number",
+    "required": false,
+    "min": 10,
+    "max": 10000,
+    "default": 100
+  },
+  "health_check_path": {
+    "type": "string",
+    "required": false,
+    "default": "/health"
+  },
+  "metrics_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "metrics_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 9090
+  },
+  "redis_url": {
+    "type": "string",
+    "required": false,
+    "pattern": "^redis://.*$"
+  },
+  "cache_ttl": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 86400,
+    "default": 3600
+  }
+} 

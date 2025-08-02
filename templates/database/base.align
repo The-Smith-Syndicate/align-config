@@ -1,0 +1,80 @@
+# Database Template - Base Configuration
+app_name = "database-app"
+version = "1.0.0"
+
+# Database Type
+database_type = "postgresql"
+database_host = "localhost"
+database_port = 5432
+database_name = "myapp"
+database_user = "postgres"
+database_password = "changeme"
+
+# Connection Pool
+connection_pool_enabled = true
+connection_pool_max_connections = 25
+connection_pool_min_connections = 5
+connection_pool_idle_timeout = 300
+connection_pool_max_lifetime = 3600
+
+# Migration Settings
+migration_enabled = true
+migration_path = "./migrations"
+migration_table = "schema_migrations"
+migration_timeout = 300
+
+# Backup Configuration
+backup_enabled = true
+backup_schedule = "0 2 * * *"
+backup_retention_days = 30
+backup_compression_enabled = true
+backup_encryption_enabled = false
+
+# Replication Settings
+replication_enabled = false
+replication_mode = "master_slave"
+replication_slaves = []
+replication_sync_mode = "async"
+
+# Performance Tuning
+query_timeout = 30
+connection_timeout = 10
+statement_timeout = 60
+idle_in_transaction_timeout = 300
+
+# Logging
+logging_enabled = true
+logging_level = "info"
+logging_slow_queries = true
+logging_slow_query_threshold = 1000
+
+# Security
+ssl_enabled = true
+ssl_mode = "require"
+ssl_cert_file = ""
+ssl_key_file = ""
+ssl_ca_file = ""
+
+# Monitoring
+monitoring_enabled = true
+monitoring_metrics_enabled = true
+monitoring_health_check_enabled = true
+monitoring_alerting_enabled = false
+
+# Maintenance
+maintenance_enabled = true
+maintenance_vacuum_enabled = true
+maintenance_analyze_enabled = true
+maintenance_autovacuum_enabled = true
+
+# Clustering
+clustering_enabled = false
+clustering_nodes = []
+clustering_consistency_level = "quorum"
+
+# Caching
+cache_enabled = true
+cache_type = "redis"
+cache_host = "localhost"
+cache_port = 6379
+cache_ttl = 3600 

@@ -1,0 +1,148 @@
+{
+  "app_name": {
+    "type": "string",
+    "required": true,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "auth_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "auth_provider": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(oauth2|jwt|saml)$"
+  },
+  "session_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 300,
+    "max": 86400,
+    "default": 3600
+  },
+  "max_login_attempts": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 20,
+    "default": 5
+  },
+  "password_min_length": {
+    "type": "number",
+    "required": false,
+    "min": 8,
+    "max": 50,
+    "default": 12
+  },
+  "require_mfa": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "ssl_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "ssl_min_version": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(TLSv1\\.2|TLSv1\\.3)$"
+  },
+  "ssl_cipher_suite": {
+    "type": "string",
+    "required": false
+  },
+  "encryption_algorithm": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(AES-128-GCM|AES-256-GCM)$"
+  },
+  "data_encryption_at_rest": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "data_encryption_in_transit": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "pii_handling_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "data_retention_days": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 3650,
+    "default": 90
+  },
+  "firewall_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "rate_limiting_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "rate_limit_requests_per_minute": {
+    "type": "number",
+    "required": false,
+    "min": 10,
+    "max": 1000,
+    "default": 100
+  },
+  "cors_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "allowed_origins": {
+    "type": "string",
+    "required": false
+  },
+  "audit_logging_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "security_logging_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "log_retention_days": {
+    "type": "number",
+    "required": false,
+    "min": 30,
+    "max": 3650,
+    "default": 365
+  },
+  "monitoring_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "gdpr_compliance": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "sox_compliance": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "pci_compliance": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  }
+} 

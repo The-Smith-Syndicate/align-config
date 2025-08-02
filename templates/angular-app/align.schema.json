@@ -1,0 +1,257 @@
+{
+  "app_name": {
+    "type": "string",
+    "required": true,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "version": {
+    "type": "string",
+    "required": true,
+    "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+  },
+  "build_path": {
+    "type": "string",
+    "required": false,
+    "default": "dist"
+  },
+  "source_map": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "minify": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "gzip": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "aot_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 4200
+  },
+  "host": {
+    "type": "string",
+    "required": false,
+    "default": "0.0.0.0"
+  },
+  "server_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 300,
+    "default": 30
+  },
+  "api_base_url": {
+    "type": "string",
+    "required": false,
+    "pattern": "^https?://.*$"
+  },
+  "api_timeout": {
+    "type": "number",
+    "required": false,
+    "min": 1000,
+    "max": 300000,
+    "default": 30000
+  },
+  "api_retry_attempts": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 10,
+    "default": 3
+  },
+  "api_retry_delay": {
+    "type": "number",
+    "required": false,
+    "min": 100,
+    "max": 10000,
+    "default": 1000
+  },
+  "angular_version": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+  },
+  "angular_ivy_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "angular_strict_mode": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "angular_es5_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "build_optimizer_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "named_chunks_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "vendor_chunk_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "common_chunk_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "service_worker_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "service_worker_scope": {
+    "type": "string",
+    "required": false,
+    "default": "/"
+  },
+  "service_worker_update_mode": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(immediate|check|manual)$",
+    "default": "immediate"
+  },
+  "testing_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "testing_framework": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(jasmine|jest)$",
+    "default": "jasmine"
+  },
+  "testing_coverage_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "testing_coverage_threshold": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 100,
+    "default": 80
+  },
+  "lazy_loading_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "preload_strategy": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(PreloadAllModules|NoPreloading)$",
+    "default": "PreloadAllModules"
+  },
+  "prefetch_strategy": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(PrefetchAllModules|NoPrefetching)$",
+    "default": "PrefetchAllModules"
+  },
+  "csp_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "csp_report_only": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "csp_report_uri": {
+    "type": "string",
+    "required": false,
+    "pattern": "^https?://.*$"
+  },
+  "i18n_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "i18n_default_locale": {
+    "type": "string",
+    "required": false,
+    "default": "en"
+  },
+  "i18n_supported_locales": {
+    "type": "string",
+    "required": false
+  },
+  "i18n_load_path": {
+    "type": "string",
+    "required": false
+  },
+  "analytics_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "analytics_id": {
+    "type": "string",
+    "required": false
+  },
+  "analytics_debug": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "error_tracking_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "error_tracking_dsn": {
+    "type": "string",
+    "required": false
+  },
+  "error_tracking_environment": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(development|staging|production)$"
+  },
+  "dev_tools_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  },
+  "dev_tools_port": {
+    "type": "number",
+    "required": false,
+    "min": 1024,
+    "max": 65535,
+    "default": 4201
+  },
+  "hot_reload_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": true
+  }
+} 

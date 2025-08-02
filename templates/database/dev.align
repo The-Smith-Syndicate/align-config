@@ -1,0 +1,61 @@
+# Development Environment Overrides
+database_host = "localhost"
+database_port = 5432
+database_name = "myapp_dev"
+database_user = "dev_user"
+database_password = "dev_password"
+
+# Development Connection Pool
+connection_pool_max_connections = 10
+connection_pool_min_connections = 2
+connection_pool_idle_timeout = 300
+connection_pool_max_lifetime = 1800
+
+# Development Migration
+migration_enabled = true
+migration_path = "./migrations"
+migration_timeout = 60
+
+# Development Backup
+backup_enabled = false
+backup_schedule = "0 2 * * *"
+backup_retention_days = 7
+backup_compression_enabled = true
+backup_encryption_enabled = false
+
+# Development Replication
+replication_enabled = false
+
+# Development Performance
+query_timeout = 30
+connection_timeout = 5
+statement_timeout = 60
+idle_in_transaction_timeout = 300
+
+# Development Logging
+logging_level = "debug"
+logging_slow_queries = true
+logging_slow_query_threshold = 500
+
+# Development Security
+ssl_enabled = false
+
+# Development Monitoring
+monitoring_enabled = true
+monitoring_metrics_enabled = true
+monitoring_health_check_enabled = true
+monitoring_alerting_enabled = false
+
+# Development Maintenance
+maintenance_enabled = true
+maintenance_vacuum_enabled = true
+maintenance_analyze_enabled = true
+maintenance_autovacuum_enabled = true
+
+# Development Clustering
+clustering_enabled = false
+
+# Development Cache
+cache_host = "localhost"
+cache_port = 6379
+cache_ttl = 300 

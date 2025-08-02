@@ -1,0 +1,26 @@
+# Development security overrides
+session_timeout = 7200  # 2 hours for development
+max_login_attempts = 10  # More lenient for development
+password_min_length = 8  # Lower requirement for development
+
+# Development encryption
+ssl_min_version = "TLSv1.2"
+ssl_cipher_suite = "ECDHE-RSA-AES128-GCM-SHA256"
+encryption_algorithm = "AES-128-GCM"
+
+# Development data protection
+data_retention_days = 30  # Shorter retention for development
+pii_handling_enabled = false  # Disable PII handling in dev
+
+# Development network security
+rate_limit_requests_per_minute = 200  # Higher rate limit for development
+cors_enabled = true  # Enable CORS for development
+allowed_origins = ["http://localhost:3000", "http://localhost:8080"]
+
+# Development logging
+log_retention_days = 30  # Shorter retention for development
+audit_logging_enabled = true
+security_logging_enabled = true
+
+# Development compliance
+pci_compliance = false  # Disable PCI compliance for development 

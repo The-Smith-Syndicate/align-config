@@ -1,0 +1,48 @@
+# Development Environment Overrides
+port = 4200
+source_map = true
+minify = false
+gzip = false
+aot_enabled = false
+
+# Development API
+api_base_url = "http://localhost:8080/api"
+api_timeout = 60000
+
+# Development Angular
+angular_strict_mode = false
+angular_es5_enabled = false
+
+# Development Build Optimizations
+build_optimizer_enabled = false
+named_chunks_enabled = true
+vendor_chunk_enabled = true
+common_chunk_enabled = true
+
+# Development Service Worker
+service_worker_enabled = false
+
+# Development Testing
+testing_enabled = true
+testing_coverage_enabled = true
+testing_coverage_threshold = 70
+
+# Development Performance
+lazy_loading_enabled = true
+preload_strategy = "NoPreloading"
+prefetch_strategy = "NoPrefetching"
+
+# Development Security
+csp_enabled = false
+
+# Development Analytics
+analytics_enabled = false
+analytics_debug = true
+
+# Development Error Tracking
+error_tracking_enabled = false
+
+# Development Tools
+dev_tools_enabled = true
+dev_tools_port = 4201
+hot_reload_enabled = true 

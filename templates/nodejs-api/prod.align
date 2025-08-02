@@ -1,0 +1,22 @@
+# Production Environment Overrides
+port = 80
+log_level = "warn"
+log_format = "json"
+
+# Production Database
+database_url = "postgresql://prod-db:5432/myapp_prod"
+database_pool_size = 20
+database_timeout = 10000
+
+# Production Security
+cors_origins = ["https://myapp.com", "https://api.myapp.com"]
+rate_limit_max = 50
+rate_limit_window = 600000
+
+# Production Monitoring
+metrics_enabled = true
+metrics_port = 9090
+
+# Production Cache
+redis_url = "redis://prod-redis:6379"
+cache_ttl = 7200 

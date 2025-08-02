@@ -1,0 +1,40 @@
+# Python API Template - Base Configuration
+app_name = "my-python-api"
+version = "1.0.0"
+
+# Server Configuration
+port = 8000
+host = "0.0.0.0"
+workers = 4
+timeout = 30
+
+# Database Configuration
+database_url = "postgresql://localhost:5432/myapp"
+database_pool_size = 10
+database_timeout = 5
+
+# Authentication
+secret_key = "your-super-secret-key-that-is-at-least-32-characters-long"
+jwt_expires_in = "24h"
+password_salt_rounds = 12
+
+# Logging
+log_level = "INFO"
+log_format = "json"
+log_file = "./logs/app.log"
+
+# Security
+cors_enabled = true
+cors_origins = ["http://localhost:3000"]
+rate_limit_enabled = true
+rate_limit_window = 900
+rate_limit_max = 100
+
+# Monitoring
+health_check_path = "/health"
+metrics_enabled = true
+metrics_port = 9090
+
+# Cache
+redis_url = "redis://localhost:6379"
+cache_ttl = 3600 

@@ -1,0 +1,75 @@
+# Angular App Template - Base Configuration
+app_name = "angular-app"
+version = "1.0.0"
+
+# Build Configuration
+build_path = "dist"
+source_map = true
+minify = true
+gzip = true
+aot_enabled = true
+
+# Server Configuration
+port = 4200
+host = "0.0.0.0"
+server_timeout = 30
+
+# API Configuration
+api_base_url = "http://localhost:8080/api"
+api_timeout = 30000
+api_retry_attempts = 3
+api_retry_delay = 1000
+
+# Angular Specific
+angular_version = "16.0.0"
+angular_ivy_enabled = true
+angular_strict_mode = true
+angular_es5_enabled = false
+
+# Build Optimizations
+build_optimizer_enabled = true
+named_chunks_enabled = true
+vendor_chunk_enabled = true
+common_chunk_enabled = true
+
+# Service Worker
+service_worker_enabled = false
+service_worker_scope = "/"
+service_worker_update_mode = "immediate"
+
+# Testing
+testing_enabled = true
+testing_framework = "jasmine"
+testing_coverage_enabled = true
+testing_coverage_threshold = 80
+
+# Performance
+lazy_loading_enabled = true
+preload_strategy = "PreloadAllModules"
+prefetch_strategy = "PrefetchAllModules"
+
+# Security
+csp_enabled = true
+csp_report_only = false
+csp_report_uri = "https://myapp.com/csp-report"
+
+# Internationalization
+i18n_enabled = true
+i18n_default_locale = "en"
+i18n_supported_locales = ["en", "es", "fr"]
+i18n_load_path = "/assets/i18n/{{lng}}.json"
+
+# Analytics
+analytics_enabled = true
+analytics_id = "your-analytics-id"
+analytics_debug = false
+
+# Error Tracking
+error_tracking_enabled = true
+error_tracking_dsn = "your-error-tracking-dsn"
+error_tracking_environment = "development"
+
+# Development Tools
+dev_tools_enabled = true
+dev_tools_port = 4201
+hot_reload_enabled = true 

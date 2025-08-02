@@ -1,0 +1,40 @@
+# Security-focused base configuration
+app_name = "secure-app"
+
+# Authentication & Authorization
+auth_enabled = true
+auth_provider = "oauth2"
+session_timeout = 3600
+max_login_attempts = 5
+password_min_length = 12
+require_mfa = true
+
+# Encryption
+ssl_enabled = true
+ssl_min_version = "TLSv1.2"
+ssl_cipher_suite = "ECDHE-RSA-AES256-GCM-SHA384"
+encryption_algorithm = "AES-256-GCM"
+
+# Data Protection
+data_encryption_at_rest = true
+data_encryption_in_transit = true
+pii_handling_enabled = true
+data_retention_days = 90
+
+# Network Security
+firewall_enabled = true
+rate_limiting_enabled = true
+rate_limit_requests_per_minute = 100
+cors_enabled = false
+allowed_origins = []
+
+# Logging & Monitoring
+audit_logging_enabled = true
+security_logging_enabled = true
+log_retention_days = 365
+monitoring_enabled = true
+
+# Compliance
+gdpr_compliance = true
+sox_compliance = true
+pci_compliance = false 

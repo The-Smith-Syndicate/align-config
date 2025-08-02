@@ -1,0 +1,52 @@
+# Production Environment Overrides
+port = 80
+source_map = false
+minify = true
+gzip = true
+static_export = false
+
+# Production API
+api_base_url = "https://api.myapp.com"
+api_timeout = 15000
+api_retry_attempts = 2
+api_retry_delay = 500
+
+# Production SSR
+ssr_enabled = true
+ssr_cache_enabled = true
+ssr_cache_ttl = 3600
+ssr_revalidate = 3600
+
+# Production Static Generation
+static_generation_enabled = true
+static_generation_fallback = false
+static_generation_revalidate = 3600
+
+# Production Image Optimization
+image_optimization_enabled = true
+image_domains = ["myapp.com", "cdn.myapp.com"]
+
+# Production Performance
+lazy_loading_enabled = true
+code_splitting_enabled = true
+preload_critical_chunks = true
+service_worker_enabled = true
+
+# Production Security
+csp_enabled = true
+csp_report_only = false
+csp_report_uri = "https://myapp.com/csp-report"
+
+# Production Analytics
+analytics_enabled = true
+analytics_id = "prod-analytics-id"
+analytics_debug = false
+
+# Production Error Tracking
+error_tracking_enabled = true
+error_tracking_dsn = "prod-error-tracking-dsn"
+error_tracking_environment = "production"
+
+# Production Tools
+dev_tools_enabled = false
+hot_reload_enabled = false 

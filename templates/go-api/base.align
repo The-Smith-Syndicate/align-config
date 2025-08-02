@@ -1,0 +1,61 @@
+# Go API Template - Base Configuration
+app_name = "go-api"
+version = "1.0.0"
+
+# Server Configuration
+port = 8080
+host = "0.0.0.0"
+read_timeout = 30
+write_timeout = 30
+idle_timeout = 60
+
+# Database Configuration
+database_url = "postgresql://localhost:5432/myapp"
+database_max_connections = 25
+database_max_idle_connections = 5
+database_connection_timeout = 5
+database_query_timeout = 30
+
+# Authentication
+jwt_secret = "your-super-secret-jwt-key-that-is-at-least-32-characters-long"
+jwt_expires_in = "24h"
+bcrypt_cost = 12
+
+# Logging
+log_level = "info"
+log_format = "json"
+log_file = "./logs/app.log"
+log_max_size = 100
+log_max_age = 30
+log_max_backups = 10
+
+# Security
+cors_enabled = true
+cors_origins = ["http://localhost:3000"]
+cors_credentials = true
+rate_limit_enabled = true
+rate_limit_window = 900
+rate_limit_max = 100
+trusted_proxies = ["127.0.0.1", "::1"]
+
+# Monitoring
+health_check_path = "/health"
+metrics_enabled = true
+metrics_port = 9090
+metrics_path = "/metrics"
+tracing_enabled = false
+tracing_endpoint = "http://localhost:14268/api/traces"
+
+# Cache
+redis_url = "redis://localhost:6379"
+redis_pool_size = 10
+cache_ttl = 3600
+
+# API Configuration
+api_version = "v1"
+api_prefix = "/api"
+swagger_enabled = true
+swagger_path = "/swagger/*"
+
+# Graceful Shutdown
+shutdown_timeout = 30 

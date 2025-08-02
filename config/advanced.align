@@ -1,0 +1,28 @@
+service_name = "web"
+timeout = 3000
+auth_required = true
+
+# Nested service blocks
+service "auth" {
+  port = 4000
+  retries = 3
+  timeout = 5000
+}
+
+service "api" {
+  port = 8080
+  cors_enabled = true
+  rate_limit = 1000
+}
+
+# Database configuration
+database "main" {
+  url = "postgresql://localhost:5432/myapp"
+  pool_size = 10
+  ssl = true
+}
+
+database "cache" {
+  url = "redis://localhost:6379"
+  ttl = 3600
+} 

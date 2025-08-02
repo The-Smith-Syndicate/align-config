@@ -1,0 +1,46 @@
+# Development Environment Overrides
+port = 3000
+source_map = true
+minify = false
+gzip = false
+static_export = false
+
+# Development API
+api_base_url = "http://localhost:3000/api"
+api_timeout = 60000
+
+# Development SSR
+ssr_enabled = true
+ssr_cache_enabled = false
+ssr_cache_ttl = 60
+ssr_revalidate = 10
+
+# Development Static Generation
+static_generation_enabled = true
+static_generation_fallback = true
+static_generation_revalidate = 60
+
+# Development Image Optimization
+image_optimization_enabled = true
+image_domains = ["localhost"]
+
+# Development Performance
+lazy_loading_enabled = true
+code_splitting_enabled = true
+preload_critical_chunks = false
+service_worker_enabled = false
+
+# Development Security
+csp_enabled = false
+
+# Development Analytics
+analytics_enabled = false
+analytics_debug = true
+
+# Development Error Tracking
+error_tracking_enabled = false
+
+# Development Tools
+dev_tools_enabled = true
+dev_tools_port = 3001
+hot_reload_enabled = true 

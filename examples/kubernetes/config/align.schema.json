@@ -1,0 +1,112 @@
+{
+  "app_name": {
+    "type": "string",
+    "required": true,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "namespace": {
+    "type": "string",
+    "required": true,
+    "minLength": 1,
+    "maxLength": 50
+  },
+  "replicas": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 100,
+    "default": 3
+  },
+  "image": {
+    "type": "string",
+    "required": true,
+    "pattern": "^[a-zA-Z0-9._/-]+:[a-zA-Z0-9._/-]*$"
+  },
+  "resources_cpu_limit": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[0-9]+m$|^[0-9]+$"
+  },
+  "resources_memory_limit": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[0-9]+[KMGTPEZYkmgtpezy]i?$"
+  },
+  "resources_cpu_request": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[0-9]+m$|^[0-9]+$"
+  },
+  "resources_memory_request": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[0-9]+[KMGTPEZYkmgtpezy]i?$"
+  },
+  "liveness_path": {
+    "type": "string",
+    "required": false,
+    "default": "/health"
+  },
+  "readiness_path": {
+    "type": "string",
+    "required": false,
+    "default": "/ready"
+  },
+  "health_check_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535,
+    "default": 8080
+  },
+  "security_context_run_as_user": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 65535
+  },
+  "security_context_run_as_group": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 65535
+  },
+  "security_context_fs_group": {
+    "type": "number",
+    "required": false,
+    "min": 0,
+    "max": 65535
+  },
+  "service_type": {
+    "type": "string",
+    "required": false,
+    "pattern": "^(ClusterIP|NodePort|LoadBalancer|ExternalName)$"
+  },
+  "service_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535
+  },
+  "target_port": {
+    "type": "number",
+    "required": false,
+    "min": 1,
+    "max": 65535
+  },
+  "persistent_volume_enabled": {
+    "type": "boolean",
+    "required": false,
+    "default": false
+  },
+  "storage_class": {
+    "type": "string",
+    "required": false
+  },
+  "volume_size": {
+    "type": "string",
+    "required": false,
+    "pattern": "^[0-9]+[KMGTPEZYkmgtpezy]i?$"
+  }
+} 

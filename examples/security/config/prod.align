@@ -1,0 +1,26 @@
+# Production security overrides
+session_timeout = 1800  # 30 minutes for production
+max_login_attempts = 3  # Stricter for production
+password_min_length = 16  # Stronger passwords
+
+# Production encryption
+ssl_min_version = "TLSv1.3"
+ssl_cipher_suite = "TLS_AES_256_GCM_SHA384"
+encryption_algorithm = "AES-256-GCM"
+
+# Production data protection
+data_retention_days = 2555  # 7 years for compliance
+pii_handling_enabled = true
+
+# Production network security
+rate_limit_requests_per_minute = 50  # Stricter rate limiting
+cors_enabled = false
+allowed_origins = ["https://secure-app.com"]
+
+# Production logging
+log_retention_days = 2555  # 7 years for compliance
+audit_logging_enabled = true
+security_logging_enabled = true
+
+# Production compliance
+pci_compliance = true  # Enable PCI compliance for production 

@@ -1,0 +1,19 @@
+# Development Environment Overrides
+port = 3000
+log_level = "debug"
+log_format = "pretty"
+
+# Development Database
+database_url = "postgresql://localhost:5432/myapp_dev"
+database_pool_size = 5
+
+# Development Security
+cors_origins = ["http://localhost:3000", "http://localhost:8080"]
+rate_limit_max = 1000
+
+# Development Monitoring
+metrics_enabled = false
+
+# Development Cache
+redis_url = "redis://localhost:6379"
+cache_ttl = 60 

@@ -1,0 +1,31 @@
+# Base configuration for Kubernetes deployments
+app_name = "myapp"
+namespace = "default"
+replicas = 3
+image = "myapp:latest"
+
+# Resource limits
+resources_cpu_limit = "500m"
+resources_memory_limit = "512Mi"
+resources_cpu_request = "250m"
+resources_memory_request = "256Mi"
+
+# Health checks
+liveness_path = "/health"
+readiness_path = "/ready"
+health_check_port = 8080
+
+# Security
+security_context_run_as_user = 1000
+security_context_run_as_group = 1000
+security_context_fs_group = 1000
+
+# Networking
+service_type = "ClusterIP"
+service_port = 80
+target_port = 8080
+
+# Storage
+persistent_volume_enabled = false
+storage_class = "standard"
+volume_size = "1Gi" 

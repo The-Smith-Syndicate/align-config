@@ -1,0 +1,70 @@
+# Production Environment Overrides
+database_host = "postgres.service.internal"
+database_port = 5432
+database_name = "myapp_prod"
+database_user = "prod_user"
+database_password = "prod-password"
+
+# Production Connection Pool
+connection_pool_max_connections = 50
+connection_pool_min_connections = 10
+connection_pool_idle_timeout = 600
+connection_pool_max_lifetime = 3600
+
+# Production Migration
+migration_enabled = true
+migration_path = "./migrations"
+migration_timeout = 300
+
+# Production Backup
+backup_enabled = true
+backup_schedule = "0 2 * * *"
+backup_retention_days = 30
+backup_compression_enabled = true
+backup_encryption_enabled = true
+
+# Production Replication
+replication_enabled = true
+replication_mode = "master_slave"
+replication_slaves = ["postgres-slave1.internal", "postgres-slave2.internal"]
+replication_sync_mode = "async"
+
+# Production Performance
+query_timeout = 60
+connection_timeout = 10
+statement_timeout = 120
+idle_in_transaction_timeout = 600
+
+# Production Logging
+logging_level = "warn"
+logging_slow_queries = true
+logging_slow_query_threshold = 1000
+
+# Production Security
+ssl_enabled = true
+ssl_mode = "require"
+ssl_cert_file = "/etc/ssl/certs/postgres.crt"
+ssl_key_file = "/etc/ssl/private/postgres.key"
+ssl_ca_file = "/etc/ssl/certs/ca.crt"
+
+# Production Monitoring
+monitoring_enabled = true
+monitoring_metrics_enabled = true
+monitoring_health_check_enabled = true
+monitoring_alerting_enabled = true
+
+# Production Maintenance
+maintenance_enabled = true
+maintenance_vacuum_enabled = true
+maintenance_analyze_enabled = true
+maintenance_autovacuum_enabled = true
+
+# Production Clustering
+clustering_enabled = true
+clustering_nodes = ["postgres-node1.internal", "postgres-node2.internal", "postgres-node3.internal"]
+clustering_consistency_level = "quorum"
+
+# Production Cache
+cache_host = "redis.service.internal"
+cache_port = 6379
+cache_ttl = 3600 

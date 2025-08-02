@@ -1,0 +1,31 @@
+# Production Environment Overrides
+port = 80
+log_level = "warn"
+log_format = "json"
+
+# Production Database
+database_url = "postgresql://prod-db:5432/myapp_prod"
+database_max_connections = 50
+database_max_idle_connections = 10
+database_connection_timeout = 10
+database_query_timeout = 60
+
+# Production Security
+cors_origins = ["https://myapp.com", "https://api.myapp.com"]
+rate_limit_max = 50
+rate_limit_window = 600
+trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+
+# Production Monitoring
+metrics_enabled = true
+metrics_port = 9090
+tracing_enabled = true
+tracing_endpoint = "http://jaeger:14268/api/traces"
+
+# Production Cache
+redis_url = "redis://prod-redis:6379"
+redis_pool_size = 20
+cache_ttl = 7200
+
+# Production API
+swagger_enabled = false 
