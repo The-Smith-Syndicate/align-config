@@ -40,6 +40,33 @@ align analyze --config-dir=./config --env=dev
 2. **Add environment overrides** - Create `dev.align`, `prod.align` for different environments
 3. **Validate everything** - `align validate config/base.align --base`
 
+#### Migrating from .env Files
+If you have existing `.env` files, convert them to `.align` format:
+
+**Before (.env):**
+```bash
+# .env
+DATABASE_URL=postgresql://localhost:5432/myapp
+PORT=8080
+DEBUG=true
+JWT_SECRET=my-secret-key
+```
+
+**After (base.align):**
+```align
+# base.align
+database_url = "postgresql://localhost:5432/myapp"
+port = 8080
+debug = true
+jwt_secret = "my-secret-key"
+```
+
+**Benefits of conversion:**
+- ✅ **Type safety** - numbers, booleans, strings are properly typed
+- ✅ **Validation** - catch errors before deployment
+- ✅ **Environment overrides** - `dev.align`, `prod.align` for different environments
+- ✅ **Schema validation** - enforce configuration rules
+
 ### For Teams
 1. **Add schema validation** - Create `align.schema.json` to enforce standards
 2. **Use dry-run** - `align dry-run --env=prod --key=timeout --value=5000` to test changes
@@ -52,7 +79,30 @@ align analyze --config-dir=./config --env=dev
 
 ## 🎯 Purpose
 
-Replace fragile, scattered `.env` files, YAML, JSON, and Kubernetes overrides with a single source of truth: `.align` files. Align validates config files, merges environment-specific overrides, outputs clean JSON or YAML, and helps teams understand what their configuration is doing before they deploy.
+**Align** is a domain-specific configuration language and toolchain that makes application configuration safe, predictable, and unified across environments. 
+
+### **The Problem**
+Most applications use scattered configuration files:
+- `.env` files (environment variables)
+- `config.json` (application config)
+- `docker-compose.yml` (container config)
+- Kubernetes ConfigMaps (deployment config)
+
+This leads to:
+- ❌ **Inconsistent formats** across environments
+- ❌ **No validation** of configuration values
+- ❌ **Hard to trace** where values come from
+- ❌ **Difficult to manage** across teams
+
+### **The Solution**
+Replace all scattered config files with **`.align` files**:
+- ✅ **Single format** for all configuration
+- ✅ **Built-in validation** and type checking
+- ✅ **Clear override paths** and traceability
+- ✅ **Environment-specific** configurations
+- ✅ **Schema-driven** validation rules
+
+**Align replaces `.env` files with a more powerful, type-safe alternative.**
 
 ## 🔒 Security Benefits
 
@@ -99,6 +149,21 @@ node index.js --help
 ├── output/
 │   └── config.dev.json      # Generated config
 ```
+
+### File Naming Conventions
+
+**Required files:**
+- `base.align` - Base configuration (always loaded first)
+- `<env>.align` - Environment-specific overrides (e.g., `dev.align`, `prod.align`)
+
+**Optional files:**
+- `align.schema.json` - Schema validation rules
+- `output/` - Directory for generated configurations
+
+**File naming rules:**
+- Use lowercase with underscores: `service_name`, `database_url`
+- Environment names: `dev`, `prod`, `staging`, `test`
+- Schema file must be named exactly: `align.schema.json`
 
 ## 📖 Configuration Format
 
@@ -341,6 +406,40 @@ $ node index.js analyze --config-dir=./config --env=prod --detailed
 
 ✅ Good Practices Found:
   1. Strong JWT secret configured
+```
+
+## ⚠️ Error Handling & Exit Codes
+
+Align uses standard exit codes for automation and CI/CD:
+
+- **`0`** - Success (validation passed, build completed, etc.)
+- **`1`** - General error (file not found, invalid syntax, etc.)
+- **`2`** - Validation error (missing required fields, type errors, etc.)
+
+### Common Error Scenarios
+
+**File not found:**
+```bash
+$ align validate config/missing.align
+❌ Error: Configuration file not found: config/missing.align
+```
+
+**Validation failed:**
+```bash
+$ align validate config/base.align --base
+❌ Validation failed: Missing required key: service_name
+```
+
+**Invalid syntax:**
+```bash
+$ align validate config/invalid.align
+❌ Invalid syntax on line 2: missing '='
+```
+
+**Type error:**
+```bash
+$ align validate config/type-error.align --schema config/schema.json
+❌ Validation failed: port must be a number, got "abc"
 ```
 
 ## 📋 Schema Validation
