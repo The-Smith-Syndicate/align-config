@@ -231,6 +231,14 @@ program
   .option('--schema <file>', 'Schema file path (align.schema.json)')
   .option('--k8s-configmap', 'Generate Kubernetes ConfigMap YAML')
   .option('--comments', 'Include field descriptions as comments in output (requires schema, not valid for standard JSON)')
+  .hook('preAction', (thisCommand, actionCommand) => {
+    // Validate conflicting options
+    const options = actionCommand.opts();
+    if (options.comments && options.format === 'json') {
+      console.error(chalk.red('❌ Error: --comments flag is not valid with --format=json. Use --format=jsonc for JSON with comments.'));
+      process.exit(1);
+    }
+  })
   .action((options) => {
     try {
       const configDir = path.resolve(options.configDir);
@@ -276,6 +284,13 @@ program
 
       console.log(chalk.blue(`📁 Loading base config: ${basePath}`));
       const baseContent = fs.readFileSync(basePath, 'utf-8');
+      
+      // Validate file is not empty
+      if (!baseContent.trim()) {
+        console.error(chalk.red(`❌ Base config file is empty: ${basePath}`));
+        process.exit(1);
+      }
+      
       const baseConfig = parseAlign(baseContent);
       const baseErrors = validateConfig(baseConfig, true, schema); // Base config validation
       
@@ -293,6 +308,13 @@ program
 
       console.log(chalk.blue(`📁 Loading environment config: ${envPath}`));
       const envContent = fs.readFileSync(envPath, 'utf-8');
+      
+      // Validate file is not empty
+      if (!envContent.trim()) {
+        console.error(chalk.red(`❌ Environment config file is empty: ${envPath}`));
+        process.exit(1);
+      }
+      
       const envConfig = parseAlign(envContent);
       const envErrors = validateConfig(envConfig, false, schema); // Environment config validation
       
@@ -320,6 +342,7 @@ program
       const outDir = path.dirname(outPath);
       if (!fs.existsSync(outDir)) {
         fs.mkdirSync(outDir, { recursive: true });
+        console.log(chalk.blue(`📁 Created output directory: ${outDir}`));
       }
 
       // Generate output based on format
@@ -431,8 +454,15 @@ program
         fileExtension = '.json';
       }
 
-      // Update output path if format doesn't match extension
-      const finalOutPath = outPath.endsWith(fileExtension) ? outPath : outPath.replace(/\.[^.]+$/, fileExtension);
+      // Respect user's file extension if provided, otherwise use format-appropriate extension
+      let finalOutPath = outPath;
+      if (!outPath.includes('.')) {
+        // No extension provided, add appropriate one
+        finalOutPath = outPath + fileExtension;
+      } else if (!outPath.endsWith(fileExtension)) {
+        // Extension provided but doesn't match format, warn user
+        console.log(chalk.yellow(`⚠️  File extension doesn't match format. Using provided extension: ${path.extname(outPath)}`));
+      }
       
       fs.writeFileSync(finalOutPath, output);
 
@@ -2372,7 +2402,7 @@ program
   .option('--format <format>', 'Output format (text, json) (default: "text")')
   .action(async (options) => {
     try {
-      const environment = options.env || 'production';
+      const environment = options.env || 'dev';
       const configDir = path.resolve(options.configDir || './config');
       const policyFile = options.policyFile || './align.policies.json';
       
@@ -2419,7 +2449,7 @@ program
   .option('--format <format>', 'Output format (text, json) (default: "text")')
   .action(async (options) => {
     try {
-      const environment = options.env || 'production';
+      const environment = options.env || 'dev';
       const configDir = path.resolve(options.configDir || './config');
       
       // Load configuration
