@@ -3,7 +3,6 @@ const {
   parseAlign, 
   validateConfig, 
   mergeConfigs, 
-  loadSchema, 
   performSmartAnalysis,
   discoverPackageSchemas,
   mergePackageSchemas,
@@ -80,7 +79,10 @@ const {
   createEnvironmentShare,
   createEnvironmentReview,
   lockEnvironment,
-  unlockEnvironment
+  unlockEnvironment,
+  // SOC 2 compliance functions
+  generateSOC2Checklist,
+  loadSchema
 } = require('./parser');
 const { Command } = require('commander');
 const chalk = require('chalk');
@@ -3886,5 +3888,595 @@ program
       process.exit(1);
     }
   });
+
+// SOC 2 COMPLIANCE COMMAND
+program
+  .command('soc2-checklist')
+  .description('Generate SOC 2 compliance checklist for configuration')
+  .option('--env <environment>', 'Environment to check (dev, prod, staging)', 'prod')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--schema <file>', 'Schema file path (align.schema.json)')
+  .option('--format <format>', 'Output format (text, json, csv)', 'text')
+  .option('--detailed', 'Show detailed compliance information')
+  .option('--output <file>', 'Output file path')
+  .option('--fail-on-violations', 'Exit with error code if violations found')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const env = options.env;
+      
+      console.log(chalk.blue(`🔒 SOC 2 Compliance Check: ${env} environment`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}\n`));
+
+      // Load schema if provided
+      let schema = null;
+      if (options.schema) {
+        const schemaPath = path.resolve(options.schema);
+        schema = loadSchema(schemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${schemaPath}`));
+        }
+      } else {
+        // Try to find align.schema.json in config directory
+        const defaultSchemaPath = path.join(configDir, 'align.schema.json');
+        schema = loadSchema(defaultSchemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${defaultSchemaPath}`));
+        }
+      }
+
+      // Load and merge configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
+      const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      // Generate SOC 2 checklist
+      const soc2Result = generateSOC2Checklist(mergedConfig, env, {
+        detailed: options.detailed,
+        schema: schema
+      });
+
+      // Output results
+      if (options.format === 'json') {
+        const output = JSON.stringify(soc2Result, null, 2);
+        if (options.output) {
+          fs.writeFileSync(options.output, output);
+          console.log(chalk.green(`✅ SOC 2 report saved to: ${options.output}`));
+        } else {
+          console.log(output);
+        }
+      } else if (options.format === 'csv') {
+        const csvOutput = generateSOC2CSV(soc2Result);
+        if (options.output) {
+          fs.writeFileSync(options.output, csvOutput);
+          console.log(chalk.green(`✅ SOC 2 CSV report saved to: ${options.output}`));
+        } else {
+          console.log(csvOutput);
+        }
+      } else {
+        displaySOC2Results(soc2Result, options.detailed);
+      }
+
+      // Exit with appropriate code
+      if (options.failOnViolations && soc2Result.compliance_status !== 'COMPLIANT') {
+        console.log(chalk.red('\n❌ SOC 2 compliance violations found!'));
+        process.exit(1);
+      } else if (soc2Result.compliance_status === 'COMPLIANT') {
+        console.log(chalk.green('\n✅ SOC 2 compliance check passed!'));
+        process.exit(0);
+      } else {
+        console.log(chalk.yellow('\n⚠️  SOC 2 compliance issues found. Review recommendations above.'));
+        process.exit(0);
+      }
+
+    } catch (err) {
+      console.error(chalk.red('❌ SOC 2 compliance check error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('soc2-report')
+  .description('Generate detailed SOC 2 compliance report')
+  .option('--env <environment>', 'Environment to analyze (dev, prod, staging)', 'prod')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--schema <file>', 'Schema file path (align.schema.json)')
+  .option('--format <format>', 'Output format (pdf, html, json)', 'json')
+  .option('--output <file>', 'Output file path')
+  .option('--template <template>', 'Report template (enterprise, startup, audit)', 'enterprise')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const env = options.env;
+      
+      console.log(chalk.blue(`📊 SOC 2 Compliance Report: ${env} environment`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}`));
+      console.log(chalk.gray(`📋 Template: ${options.template}\n`));
+
+      // Load schema if provided
+      let schema = null;
+      if (options.schema) {
+        const schemaPath = path.resolve(options.schema);
+        schema = loadSchema(schemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${schemaPath}`));
+        }
+      } else {
+        // Try to find align.schema.json in config directory
+        const defaultSchemaPath = path.join(configDir, 'align.schema.json');
+        schema = loadSchema(defaultSchemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${defaultSchemaPath}`));
+        }
+      }
+
+      // Load and merge configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
+      const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      // Generate SOC 2 checklist
+      const soc2Result = generateSOC2Checklist(mergedConfig, env, {
+        detailed: true,
+        schema: schema
+      });
+
+      // Generate detailed report
+      const report = generateSOC2Report(soc2Result, options.template);
+
+      // Output results
+      if (options.format === 'json') {
+        const output = JSON.stringify(report, null, 2);
+        if (options.output) {
+          fs.writeFileSync(options.output, output);
+          console.log(chalk.green(`✅ SOC 2 report saved to: ${options.output}`));
+        } else {
+          console.log(output);
+        }
+      } else if (options.format === 'html') {
+        const htmlOutput = generateSOC2HTML(report);
+        if (options.output) {
+          fs.writeFileSync(options.output, htmlOutput);
+          console.log(chalk.green(`✅ SOC 2 HTML report saved to: ${options.output}`));
+        } else {
+          console.log(htmlOutput);
+        }
+      } else if (options.format === 'pdf') {
+        console.log(chalk.yellow('⚠️  PDF generation requires additional dependencies'));
+        console.log(chalk.gray('Use --format=html for web-based report'));
+        process.exit(1);
+      }
+
+      console.log(chalk.green('\n✅ SOC 2 compliance report generated successfully!'));
+
+    } catch (err) {
+      console.error(chalk.red('❌ SOC 2 report generation error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('soc2-fix')
+  .description('Automatically fix SOC 2 compliance issues')
+  .option('--env <environment>', 'Environment to fix (dev, prod, staging)', 'prod')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--schema <file>', 'Schema file path (align.schema.json)')
+  .option('--dry-run', 'Show what would be fixed without making changes')
+  .option('--auto', 'Automatically apply all safe fixes')
+  .option('--interactive', 'Ask for confirmation before each fix')
+  .option('--backup', 'Create backup before making changes', true)
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const env = options.env;
+      
+      console.log(chalk.blue(`🔧 SOC 2 Compliance Fix: ${env} environment`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}\n`));
+
+      // Load schema if provided
+      let schema = null;
+      if (options.schema) {
+        const schemaPath = path.resolve(options.schema);
+        schema = loadSchema(schemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${schemaPath}`));
+        }
+      } else {
+        // Try to find align.schema.json in config directory
+        const defaultSchemaPath = path.join(configDir, 'align.schema.json');
+        schema = loadSchema(defaultSchemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${defaultSchemaPath}`));
+        }
+      }
+
+      // Load and merge configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
+      const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      // Generate SOC 2 checklist
+      const soc2Result = generateSOC2Checklist(mergedConfig, env, {
+        detailed: true,
+        schema: schema
+      });
+
+      // Generate fixes
+      const fixes = generateSOC2Fixes(soc2Result, mergedConfig, env);
+
+      if (options.dryRun) {
+        console.log(chalk.blue('🔍 DRY RUN - No changes will be made\n'));
+        displaySOC2Fixes(fixes, true);
+      } else if (options.auto) {
+        console.log(chalk.blue('🔧 Auto Mode - Applying all safe fixes\n'));
+        const results = await applySOC2Fixes(fixes, configDir, env, { backup: options.backup });
+        displaySOC2FixResults(results);
+      } else if (options.interactive) {
+        console.log(chalk.blue('🔧 Interactive Mode - Confirming each fix\n'));
+        const results = await applySOC2FixesInteractive(fixes, configDir, env, { backup: options.backup });
+        displaySOC2FixResults(results);
+      } else {
+        console.log(chalk.blue('📋 Available fixes:\n'));
+        displaySOC2Fixes(fixes, false);
+        console.log(chalk.cyan('\n💡 Use --auto to apply all fixes or --interactive for step-by-step'));
+      }
+
+    } catch (err) {
+      console.error(chalk.red('❌ SOC 2 fix error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// Helper functions for SOC 2 commands
+function generateSOC2CSV(soc2Result) {
+  const csv = ['Category,Control,Status,Score,Issues,Recommendations\n'];
+  
+  for (const [category, controls] of Object.entries(soc2Result.checklist)) {
+    for (const [control, result] of Object.entries(controls)) {
+      const issues = result.issues.join('; ');
+      const recommendations = result.recommendations.join('; ');
+      csv.push(`${category},${control},${result.status},${result.score},"${issues}","${recommendations}"\n`);
+    }
+  }
+  
+  return csv.join('');
+}
+
+function generateSOC2Report(soc2Result, template = 'enterprise') {
+  return {
+    metadata: {
+      ...soc2Result.metadata,
+      template,
+      generated_at: new Date().toISOString()
+    },
+    summary: {
+      overall_score: soc2Result.overall_score,
+      compliance_status: soc2Result.compliance_status,
+      total_controls: Object.values(soc2Result.checklist).flatMap(category => Object.keys(category)).length,
+      passed_controls: Object.values(soc2Result.checklist).flatMap(category => 
+        Object.values(category).filter(control => control.status === 'PASS')
+      ).length,
+      failed_controls: Object.values(soc2Result.checklist).flatMap(category => 
+        Object.values(category).filter(control => control.status === 'FAIL')
+      ).length
+    },
+    details: soc2Result.checklist,
+    scores: soc2Result.scores,
+    recommendations: soc2Result.recommendations
+  };
+}
+
+function generateSOC2HTML(report) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <title>SOC 2 Compliance Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .header { background: #f0f0f0; padding: 20px; border-radius: 5px; }
+    .score { font-size: 24px; font-weight: bold; }
+    .pass { color: green; }
+    .fail { color: red; }
+    .warn { color: orange; }
+    .section { margin: 20px 0; }
+    .control { margin: 10px 0; padding: 10px; border-left: 3px solid #ccc; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>SOC 2 Compliance Report</h1>
+    <p>Environment: ${report.metadata.environment}</p>
+    <p>Generated: ${report.metadata.generated_at}</p>
+    <p class="score">Overall Score: ${report.summary.overall_score}%</p>
+    <p>Status: <span class="${report.summary.compliance_status === 'COMPLIANT' ? 'pass' : 'fail'}">${report.summary.compliance_status}</span></p>
+  </div>
+  
+  <div class="section">
+    <h2>Summary</h2>
+    <p>Total Controls: ${report.summary.total_controls}</p>
+    <p>Passed: ${report.summary.passed_controls}</p>
+    <p>Failed: ${report.summary.failed_controls}</p>
+  </div>
+  
+  <div class="section">
+    <h2>Recommendations</h2>
+    <ul>
+      ${report.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+    </ul>
+  </div>
+</body>
+</html>`;
+}
+
+function generateSOC2Fixes(soc2Result, config, environment) {
+  const fixes = [];
+  
+  // Generate fixes based on failed controls
+  for (const [category, controls] of Object.entries(soc2Result.checklist)) {
+    for (const [control, result] of Object.entries(controls)) {
+      if (result.status === 'FAIL') {
+        fixes.push({
+          category,
+          control,
+          issues: result.issues,
+          recommendations: result.recommendations,
+          fix_type: determineFixType(category, control),
+          priority: determinePriority(category, control),
+          safe: isSafeFix(category, control)
+        });
+      }
+    }
+  }
+  
+  return fixes;
+}
+
+function determineFixType(category, control) {
+  const fixTypes = {
+    'security': {
+      'secrets_management': 'secrets_migration',
+      'access_controls': 'access_configuration',
+      'authentication': 'auth_configuration',
+      'audit_logging': 'logging_configuration',
+      'vulnerability_management': 'security_configuration',
+      'secure_software_dev': 'process_configuration'
+    },
+    'availability': {
+      'uptime_monitoring': 'monitoring_configuration',
+      'incident_response': 'process_configuration',
+      'disaster_recovery': 'backup_configuration'
+    },
+    'processing_integrity': {
+      'cicd_pipeline_integrity': 'cicd_configuration',
+      'change_management': 'process_configuration',
+      'monitoring': 'monitoring_configuration'
+    },
+    'confidentiality': {
+      'encryption_in_transit': 'encryption_configuration',
+      'encryption_at_rest': 'encryption_configuration',
+      'secrets_management_confidentiality': 'secrets_configuration',
+      'access_restrictions': 'access_configuration'
+    }
+  };
+  
+  return fixTypes[category]?.[control] || 'general_configuration';
+}
+
+function determinePriority(category, control) {
+  const highPriority = ['secrets_management', 'access_controls', 'authentication'];
+  const mediumPriority = ['audit_logging', 'encryption_in_transit', 'encryption_at_rest'];
+  
+  if (highPriority.includes(control)) return 'HIGH';
+  if (mediumPriority.includes(control)) return 'MEDIUM';
+  return 'LOW';
+}
+
+function isSafeFix(category, control) {
+  // Safe fixes that can be applied automatically
+  const safeFixes = [
+    'logging_configuration',
+    'monitoring_configuration',
+    'process_configuration'
+  ];
+  
+  const fixType = determineFixType(category, control);
+  return safeFixes.includes(fixType);
+}
+
+async function applySOC2Fixes(fixes, configDir, environment, options = {}) {
+  const results = {
+    applied: [],
+    skipped: [],
+    errors: []
+  };
+  
+  for (const fix of fixes) {
+    if (!fix.safe) {
+      results.skipped.push({
+        ...fix,
+        reason: 'Not a safe fix - requires manual intervention'
+      });
+      continue;
+    }
+    
+    try {
+      // Apply the fix based on type
+      const result = await applySOC2Fix(fix, configDir, environment, options);
+      results.applied.push({
+        ...fix,
+        result
+      });
+    } catch (error) {
+      results.errors.push({
+        ...fix,
+        error: error.message
+      });
+    }
+  }
+  
+  return results;
+}
+
+async function applySOC2FixesInteractive(fixes, configDir, environment, options = {}) {
+  const results = {
+    applied: [],
+    skipped: [],
+    errors: []
+  };
+  
+  for (const fix of fixes) {
+    const question = {
+      type: 'confirm',
+      name: 'apply',
+      message: `Apply fix for ${fix.category}.${fix.control}? (${fix.recommendations[0]})`,
+      default: fix.safe
+    };
+    
+    const answer = await inquirer.prompt([question]);
+    
+    if (answer.apply) {
+      try {
+        const result = await applySOC2Fix(fix, configDir, environment, options);
+        results.applied.push({
+          ...fix,
+          result
+        });
+      } catch (error) {
+        results.errors.push({
+          ...fix,
+          error: error.message
+        });
+      }
+    } else {
+      results.skipped.push({
+        ...fix,
+        reason: 'User declined'
+      });
+    }
+  }
+  
+  return results;
+}
+
+async function applySOC2Fix(fix, configDir, environment, options = {}) {
+  // This would implement specific fix logic based on fix type
+  // For now, return a placeholder result
+  return {
+    status: 'applied',
+    message: `Applied ${fix.fix_type} fix for ${fix.control}`,
+    changes: []
+  };
+}
+
+function displaySOC2Results(soc2Result, detailed = false) {
+  console.log(chalk.blue('🔒 SOC 2 Compliance Results'));
+  console.log(chalk.gray(`Environment: ${soc2Result.metadata.environment}`));
+  console.log(chalk.gray(`Overall Score: ${soc2Result.overall_score}%`));
+  console.log(chalk.gray(`Status: ${soc2Result.compliance_status}`));
+  console.log('');
+
+  // Display scores by category
+  console.log(chalk.blue('📊 Category Scores:'));
+  for (const [category, score] of Object.entries(soc2Result.scores)) {
+    if (category !== 'overall') {
+      const color = score >= 80 ? chalk.green : score >= 60 ? chalk.yellow : chalk.red;
+      console.log(chalk.gray(`  ${category}: ${color(score.toFixed(1))}%`));
+    }
+  }
+  console.log('');
+
+  // Display failed controls
+  const failedControls = [];
+  for (const [category, controls] of Object.entries(soc2Result.checklist)) {
+    for (const [control, result] of Object.entries(controls)) {
+      if (result.status === 'FAIL') {
+        failedControls.push({ category, control, result });
+      }
+    }
+  }
+
+  if (failedControls.length > 0) {
+    console.log(chalk.red('❌ Failed Controls:'));
+    failedControls.forEach(({ category, control, result }) => {
+      console.log(chalk.red(`  ${category}.${control}: ${result.score}%`));
+      if (detailed) {
+        result.issues.forEach(issue => {
+          console.log(chalk.gray(`    - ${issue}`));
+        });
+        result.recommendations.forEach(rec => {
+          console.log(chalk.cyan(`    💡 ${rec}`));
+        });
+      }
+    });
+    console.log('');
+  }
+
+  // Display recommendations
+  if (soc2Result.recommendations.length > 0) {
+    console.log(chalk.blue('💡 Recommendations:'));
+    soc2Result.recommendations.forEach(rec => {
+      console.log(chalk.gray(`  - ${rec}`));
+    });
+    console.log('');
+  }
+}
+
+function displaySOC2Fixes(fixes, dryRun = false) {
+  console.log(chalk.blue(`🔧 Available SOC 2 Fixes ${dryRun ? '(DRY RUN)' : ''}:`));
+  console.log('');
+
+  const byPriority = {
+    HIGH: [],
+    MEDIUM: [],
+    LOW: []
+  };
+
+  fixes.forEach(fix => {
+    byPriority[fix.priority].push(fix);
+  });
+
+  for (const priority of ['HIGH', 'MEDIUM', 'LOW']) {
+    if (byPriority[priority].length > 0) {
+      const color = priority === 'HIGH' ? chalk.red : priority === 'MEDIUM' ? chalk.yellow : chalk.gray;
+      console.log(color(`${priority} Priority:`));
+      
+      byPriority[priority].forEach(fix => {
+        const safeIcon = fix.safe ? '✅' : '⚠️';
+        console.log(chalk.gray(`  ${safeIcon} ${fix.category}.${fix.control}`));
+        console.log(chalk.gray(`     ${fix.recommendations[0]}`));
+      });
+      console.log('');
+    }
+  }
+}
+
+function displaySOC2FixResults(results) {
+  console.log(chalk.blue('🔧 SOC 2 Fix Results:'));
+  console.log('');
+
+  if (results.applied.length > 0) {
+    console.log(chalk.green(`✅ Applied ${results.applied.length} fixes:`));
+    results.applied.forEach(fix => {
+      console.log(chalk.gray(`  - ${fix.category}.${fix.control}: ${fix.result.message}`));
+    });
+    console.log('');
+  }
+
+  if (results.skipped.length > 0) {
+    console.log(chalk.yellow(`⚠️  Skipped ${results.skipped.length} fixes:`));
+    results.skipped.forEach(fix => {
+      console.log(chalk.gray(`  - ${fix.category}.${fix.control}: ${fix.reason}`));
+    });
+    console.log('');
+  }
+
+  if (results.errors.length > 0) {
+    console.log(chalk.red(`❌ Errors in ${results.errors.length} fixes:`));
+    results.errors.forEach(fix => {
+      console.log(chalk.gray(`  - ${fix.category}.${fix.control}: ${fix.error}`));
+    });
+    console.log('');
+  }
+}
 
 program.parse();

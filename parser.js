@@ -5511,49 +5511,1032 @@ function parseDuration(duration) {
   return 2 * 60 * 60 * 1000; // Default 2 hours
 }
 
+// SOC 2 Compliance Functions
+function generateSOC2Checklist(config, environment, options = {}) {
+  const checklist = {
+    security: {
+      secrets_management: checkSecretsManagement(config, environment),
+      access_controls: checkAccessControls(config, environment),
+      authentication: checkAuthentication(config, environment),
+      audit_logging: checkAuditLogging(config, environment),
+      vulnerability_management: checkVulnerabilityManagement(config, environment),
+      secure_software_dev: checkSecureSoftwareDev(config, environment)
+    },
+    availability: {
+      uptime_monitoring: checkUptimeMonitoring(config, environment),
+      incident_response: checkIncidentResponse(config, environment),
+      disaster_recovery: checkDisasterRecovery(config, environment)
+    },
+    processing_integrity: {
+      cicd_pipeline_integrity: checkCICDPipelineIntegrity(config, environment),
+      change_management: checkChangeManagement(config, environment),
+      monitoring: checkMonitoring(config, environment)
+    },
+    confidentiality: {
+      encryption_in_transit: checkEncryptionInTransit(config, environment),
+      encryption_at_rest: checkEncryptionAtRest(config, environment),
+      secrets_management_confidentiality: checkSecretsManagementConfidentiality(config, environment),
+      access_restrictions: checkAccessRestrictions(config, environment)
+    },
+    privacy: {
+      data_minimization: checkDataMinimization(config, environment),
+      user_consent_rights: checkUserConsentRights(config, environment),
+      privacy_policy: checkPrivacyPolicy(config, environment),
+      data_retention_policy: checkDataRetentionPolicy(config, environment)
+    }
+  };
 
+  // Calculate overall scores
+  const scores = calculateSOC2Scores(checklist);
+  
+  return {
+    checklist,
+    scores,
+    overall_score: scores.overall,
+    compliance_status: scores.overall >= 90 ? 'COMPLIANT' : scores.overall >= 70 ? 'PARTIALLY_COMPLIANT' : 'NON_COMPLIANT',
+    recommendations: generateSOC2Recommendations(checklist, scores),
+    metadata: {
+      environment,
+      timestamp: new Date().toISOString(),
+      version: '1.0.0'
+    }
+  };
+}
+
+function checkSecretsManagement(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for hardcoded secrets
+  const hardcodedSecrets = findHardcodedSecrets(config);
+  if (hardcodedSecrets.length > 0) {
+    issues.push(`Found ${hardcodedSecrets.length} hardcoded secrets`);
+    score -= 30;
+    recommendations.push('Move secrets to GCP Secret Manager using gcp:// references');
+  }
+
+  // Check for GCP secret references
+  const gcpSecrets = findGCPSecretReferences(config);
+  if (gcpSecrets.length === 0) {
+    issues.push('No GCP Secret Manager references found');
+    score -= 20;
+    recommendations.push('Use gcp:// references for all secrets');
+  } else {
+    score += 10; // Bonus for using GCP
+  }
+
+  // Check for weak secrets
+  const weakSecrets = findWeakSecrets(config);
+  if (weakSecrets.length > 0) {
+    issues.push(`Found ${weakSecrets.length} weak secrets`);
+    score -= 15;
+    recommendations.push('Use strong secrets with at least 16 characters');
+  }
+
+  // Check for environment-appropriate secrets
+  if (environment === 'prod') {
+    const devSecrets = findDevelopmentSecrets(config);
+    if (devSecrets.length > 0) {
+      issues.push(`Found ${devSecrets.length} development secrets in production`);
+      score -= 25;
+      recommendations.push('Use production-specific secrets');
+    }
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'HIGH'
+  };
+}
+
+function checkAccessControls(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for environment separation
+  const crossEnvAccess = findCrossEnvironmentAccess(config);
+  if (crossEnvAccess.length > 0) {
+    issues.push(`Found ${crossEnvAccess.length} cross-environment access patterns`);
+    score -= 20;
+    recommendations.push('Implement proper environment isolation');
+  }
+
+  // Check for service-specific access
+  const serviceAccess = findServiceSpecificAccess(config);
+  if (serviceAccess.length === 0) {
+    issues.push('No service-specific access controls found');
+    score -= 15;
+    recommendations.push('Implement service-specific access controls');
+  }
+
+  // Check for principle of least privilege
+  const excessiveAccess = findExcessiveAccess(config);
+  if (excessiveAccess.length > 0) {
+    issues.push(`Found ${excessiveAccess.length} excessive access patterns`);
+    score -= 15;
+    recommendations.push('Implement principle of least privilege');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkAuthentication(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for authentication configuration
+  const authConfig = findAuthenticationConfig(config);
+  if (authConfig.length === 0) {
+    issues.push('No authentication configuration found');
+    score -= 30;
+    recommendations.push('Configure authentication for all services');
+  }
+
+  // Check for MFA configuration
+  const mfaConfig = findMFAConfig(config);
+  if (mfaConfig.length === 0) {
+    issues.push('No MFA configuration found');
+    score -= 20;
+    recommendations.push('Enable MFA for all access');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkAuditLogging(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for logging configuration
+  const loggingConfig = findLoggingConfig(config);
+  if (loggingConfig.length === 0) {
+    issues.push('No logging configuration found');
+    score -= 25;
+    recommendations.push('Configure comprehensive logging');
+  }
+
+  // Check for audit trail
+  const auditConfig = findAuditConfig(config);
+  if (auditConfig.length === 0) {
+    issues.push('No audit trail configuration found');
+    score -= 25;
+    recommendations.push('Configure audit logging');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'HIGH'
+  };
+}
+
+function checkVulnerabilityManagement(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for security scanning configuration
+  const securityConfig = findSecurityConfig(config);
+  if (securityConfig.length === 0) {
+    issues.push('No security scanning configuration found');
+    score -= 30;
+    recommendations.push('Configure automated security scanning');
+  }
+
+  // Check for dependency management
+  const dependencyConfig = findDependencyConfig(config);
+  if (dependencyConfig.length === 0) {
+    issues.push('No dependency management configuration found');
+    score -= 20;
+    recommendations.push('Configure dependency vulnerability scanning');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkSecureSoftwareDev(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for secure coding practices
+  const secureCoding = findSecureCodingConfig(config);
+  if (secureCoding.length === 0) {
+    issues.push('No secure coding practices configuration found');
+    score -= 25;
+    recommendations.push('Implement secure coding practices');
+  }
+
+  // Check for code review configuration
+  const codeReview = findCodeReviewConfig(config);
+  if (codeReview.length === 0) {
+    issues.push('No code review configuration found');
+    score -= 25;
+    recommendations.push('Implement mandatory code reviews');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkUptimeMonitoring(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for monitoring configuration
+  const monitoringConfig = findMonitoringConfig(config);
+  if (monitoringConfig.length === 0) {
+    issues.push('No monitoring configuration found');
+    score -= 30;
+    recommendations.push('Configure comprehensive monitoring');
+  }
+
+  // Check for alerting configuration
+  const alertingConfig = findAlertingConfig(config);
+  if (alertingConfig.length === 0) {
+    issues.push('No alerting configuration found');
+    score -= 20;
+    recommendations.push('Configure alerting for critical issues');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkIncidentResponse(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for incident response configuration
+  const incidentConfig = findIncidentConfig(config);
+  if (incidentConfig.length === 0) {
+    issues.push('No incident response configuration found');
+    score -= 30;
+    recommendations.push('Configure incident response procedures');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'LOW'
+  };
+}
+
+function checkDisasterRecovery(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for backup configuration
+  const backupConfig = findBackupConfig(config);
+  if (backupConfig.length === 0) {
+    issues.push('No backup configuration found');
+    score -= 30;
+    recommendations.push('Configure automated backups');
+  }
+
+  // Check for DR configuration
+  const drConfig = findDRConfig(config);
+  if (drConfig.length === 0) {
+    issues.push('No disaster recovery configuration found');
+    score -= 30;
+    recommendations.push('Configure disaster recovery procedures');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkCICDPipelineIntegrity(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for CI/CD configuration
+  const cicdConfig = findCICDConfig(config);
+  if (cicdConfig.length === 0) {
+    issues.push('No CI/CD configuration found');
+    score -= 25;
+    recommendations.push('Configure CI/CD pipeline');
+  }
+
+  // Check for testing configuration
+  const testingConfig = findTestingConfig(config);
+  if (testingConfig.length === 0) {
+    issues.push('No testing configuration found');
+    score -= 25;
+    recommendations.push('Configure automated testing');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'HIGH'
+  };
+}
+
+function checkChangeManagement(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for change management configuration
+  const changeConfig = findChangeConfig(config);
+  if (changeConfig.length === 0) {
+    issues.push('No change management configuration found');
+    score -= 30;
+    recommendations.push('Configure change management procedures');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkMonitoring(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for application monitoring
+  const appMonitoring = findAppMonitoringConfig(config);
+  if (appMonitoring.length === 0) {
+    issues.push('No application monitoring configuration found');
+    score -= 25;
+    recommendations.push('Configure application monitoring');
+  }
+
+  // Check for error logging
+  const errorLogging = findErrorLoggingConfig(config);
+  if (errorLogging.length === 0) {
+    issues.push('No error logging configuration found');
+    score -= 25;
+    recommendations.push('Configure error logging');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkEncryptionInTransit(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for TLS/SSL configuration
+  const tlsConfig = findTLSConfig(config);
+  if (tlsConfig.length === 0) {
+    issues.push('No TLS/SSL configuration found');
+    score -= 30;
+    recommendations.push('Configure TLS/SSL for all connections');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkEncryptionAtRest(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for encryption configuration
+  const encryptionConfig = findEncryptionConfig(config);
+  if (encryptionConfig.length === 0) {
+    issues.push('No encryption at rest configuration found');
+    score -= 30;
+    recommendations.push('Configure encryption at rest');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkSecretsManagementConfidentiality(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for secrets access controls
+  const secretsAccess = findSecretsAccessConfig(config);
+  if (secretsAccess.length === 0) {
+    issues.push('No secrets access controls found');
+    score -= 25;
+    recommendations.push('Configure secrets access controls');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'HIGH'
+  };
+}
+
+function checkAccessRestrictions(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for access restrictions
+  const accessRestrictions = findAccessRestrictionsConfig(config);
+  if (accessRestrictions.length === 0) {
+    issues.push('No access restrictions found');
+    score -= 25;
+    recommendations.push('Configure access restrictions');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'MEDIUM'
+  };
+}
+
+function checkDataMinimization(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for data minimization
+  const dataMinimization = findDataMinimizationConfig(config);
+  if (dataMinimization.length === 0) {
+    issues.push('No data minimization configuration found');
+    score -= 25;
+    recommendations.push('Configure data minimization');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'LOW'
+  };
+}
+
+function checkUserConsentRights(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for user consent configuration
+  const userConsent = findUserConsentConfig(config);
+  if (userConsent.length === 0) {
+    issues.push('No user consent configuration found');
+    score -= 25;
+    recommendations.push('Configure user consent management');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'LOW'
+  };
+}
+
+function checkPrivacyPolicy(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for privacy policy configuration
+  const privacyPolicy = findPrivacyPolicyConfig(config);
+  if (privacyPolicy.length === 0) {
+    issues.push('No privacy policy configuration found');
+    score -= 25;
+    recommendations.push('Configure privacy policy');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'LOW'
+  };
+}
+
+function checkDataRetentionPolicy(config, environment) {
+  const issues = [];
+  const recommendations = [];
+  let score = 100;
+
+  // Check for data retention configuration
+  const dataRetention = findDataRetentionConfig(config);
+  if (dataRetention.length === 0) {
+    issues.push('No data retention policy configuration found');
+    score -= 25;
+    recommendations.push('Configure data retention policy');
+  }
+
+  return {
+    status: score >= 80 ? 'PASS' : score >= 60 ? 'WARN' : 'FAIL',
+    score: Math.max(0, score),
+    issues,
+    recommendations,
+    confidence: 'LOW'
+  };
+}
+
+// Helper functions for finding specific configurations
+function findHardcodedSecrets(config) {
+  const secrets = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === 'string' && 
+        (value.includes('password') || value.includes('secret') || value.includes('key')) &&
+        value.length > 8 && 
+        !value.startsWith('gcp://')) {
+      secrets.push(key);
+    }
+  }
+  return secrets;
+}
+
+function findGCPSecretReferences(config) {
+  const secrets = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === 'string' && value.startsWith('gcp://')) {
+      secrets.push(key);
+    }
+  }
+  return secrets;
+}
+
+function findWeakSecrets(config) {
+  const weakSecrets = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === 'string' && 
+        (value.includes('password') || value.includes('secret') || value.includes('key')) &&
+        value.length < 16) {
+      weakSecrets.push(key);
+    }
+  }
+  return weakSecrets;
+}
+
+function findDevelopmentSecrets(config) {
+  const devSecrets = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === 'string' && 
+        (value.includes('dev') || value.includes('test') || value.includes('localhost'))) {
+      devSecrets.push(key);
+    }
+  }
+  return devSecrets;
+}
+
+function findCrossEnvironmentAccess(config) {
+  // This would need more sophisticated logic based on actual config patterns
+  return [];
+}
+
+function findServiceSpecificAccess(config) {
+  const serviceAccess = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('service') || key.includes('api') || key.includes('consumer')) {
+      serviceAccess.push(key);
+    }
+  }
+  return serviceAccess;
+}
+
+function findExcessiveAccess(config) {
+  // This would need more sophisticated logic
+  return [];
+}
+
+function findAuthenticationConfig(config) {
+  const authConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('auth') || key.includes('login') || key.includes('jwt')) {
+      authConfig.push(key);
+    }
+  }
+  return authConfig;
+}
+
+function findMFAConfig(config) {
+  const mfaConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('mfa') || key.includes('2fa') || key.includes('multifactor')) {
+      mfaConfig.push(key);
+    }
+  }
+  return mfaConfig;
+}
+
+function findLoggingConfig(config) {
+  const loggingConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('log') || key.includes('logging')) {
+      loggingConfig.push(key);
+    }
+  }
+  return loggingConfig;
+}
+
+function findAuditConfig(config) {
+  const auditConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('audit') || key.includes('audit_log')) {
+      auditConfig.push(key);
+    }
+  }
+  return auditConfig;
+}
+
+function findSecurityConfig(config) {
+  const securityConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('security') || key.includes('vulnerability') || key.includes('scan')) {
+      securityConfig.push(key);
+    }
+  }
+  return securityConfig;
+}
+
+function findDependencyConfig(config) {
+  const dependencyConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('dependency') || key.includes('package')) {
+      dependencyConfig.push(key);
+    }
+  }
+  return dependencyConfig;
+}
+
+function findSecureCodingConfig(config) {
+  const secureCoding = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('secure') || key.includes('coding')) {
+      secureCoding.push(key);
+    }
+  }
+  return secureCoding;
+}
+
+function findCodeReviewConfig(config) {
+  const codeReview = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('review') || key.includes('code')) {
+      codeReview.push(key);
+    }
+  }
+  return codeReview;
+}
+
+function findMonitoringConfig(config) {
+  const monitoringConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('monitor') || key.includes('metrics') || key.includes('alert')) {
+      monitoringConfig.push(key);
+    }
+  }
+  return monitoringConfig;
+}
+
+function findAlertingConfig(config) {
+  const alertingConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('alert') || key.includes('notification')) {
+      alertingConfig.push(key);
+    }
+  }
+  return alertingConfig;
+}
+
+function findIncidentConfig(config) {
+  const incidentConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('incident') || key.includes('response')) {
+      incidentConfig.push(key);
+    }
+  }
+  return incidentConfig;
+}
+
+function findBackupConfig(config) {
+  const backupConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('backup') || key.includes('restore')) {
+      backupConfig.push(key);
+    }
+  }
+  return backupConfig;
+}
+
+function findDRConfig(config) {
+  const drConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('disaster') || key.includes('recovery') || key.includes('dr')) {
+      drConfig.push(key);
+    }
+  }
+  return drConfig;
+}
+
+function findCICDConfig(config) {
+  const cicdConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('ci') || key.includes('cd') || key.includes('pipeline')) {
+      cicdConfig.push(key);
+    }
+  }
+  return cicdConfig;
+}
+
+function findTestingConfig(config) {
+  const testingConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('test') || key.includes('testing')) {
+      testingConfig.push(key);
+    }
+  }
+  return testingConfig;
+}
+
+function findChangeConfig(config) {
+  const changeConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('change') || key.includes('deploy')) {
+      changeConfig.push(key);
+    }
+  }
+  return changeConfig;
+}
+
+function findAppMonitoringConfig(config) {
+  const appMonitoring = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('app') || key.includes('performance')) {
+      appMonitoring.push(key);
+    }
+  }
+  return appMonitoring;
+}
+
+function findErrorLoggingConfig(config) {
+  const errorLogging = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('error') || key.includes('exception')) {
+      errorLogging.push(key);
+    }
+  }
+  return errorLogging;
+}
+
+function findTLSConfig(config) {
+  const tlsConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('tls') || key.includes('ssl') || key.includes('https')) {
+      tlsConfig.push(key);
+    }
+  }
+  return tlsConfig;
+}
+
+function findEncryptionConfig(config) {
+  const encryptionConfig = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('encrypt') || key.includes('cipher')) {
+      encryptionConfig.push(key);
+    }
+  }
+  return encryptionConfig;
+}
+
+function findSecretsAccessConfig(config) {
+  const secretsAccess = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('secret') && key.includes('access')) {
+      secretsAccess.push(key);
+    }
+  }
+  return secretsAccess;
+}
+
+function findAccessRestrictionsConfig(config) {
+  const accessRestrictions = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('access') && key.includes('restrict')) {
+      accessRestrictions.push(key);
+    }
+  }
+  return accessRestrictions;
+}
+
+function findDataMinimizationConfig(config) {
+  const dataMinimization = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('data') && key.includes('minimize')) {
+      dataMinimization.push(key);
+    }
+  }
+  return dataMinimization;
+}
+
+function findUserConsentConfig(config) {
+  const userConsent = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('consent') || key.includes('user')) {
+      userConsent.push(key);
+    }
+  }
+  return userConsent;
+}
+
+function findPrivacyPolicyConfig(config) {
+  const privacyPolicy = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('privacy') || key.includes('policy')) {
+      privacyPolicy.push(key);
+    }
+  }
+  return privacyPolicy;
+}
+
+function findDataRetentionConfig(config) {
+  const dataRetention = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key.includes('retention') || key.includes('retain')) {
+      dataRetention.push(key);
+    }
+  }
+  return dataRetention;
+}
+
+function calculateSOC2Scores(checklist) {
+  const scores = {
+    security: 0,
+    availability: 0,
+    processing_integrity: 0,
+    confidentiality: 0,
+    privacy: 0,
+    overall: 0
+  };
+
+  // Calculate security score
+  const securityChecks = Object.values(checklist.security);
+  scores.security = securityChecks.reduce((sum, check) => sum + check.score, 0) / securityChecks.length;
+
+  // Calculate availability score
+  const availabilityChecks = Object.values(checklist.availability);
+  scores.availability = availabilityChecks.reduce((sum, check) => sum + check.score, 0) / availabilityChecks.length;
+
+  // Calculate processing integrity score
+  const processingIntegrityChecks = Object.values(checklist.processing_integrity);
+  scores.processing_integrity = processingIntegrityChecks.reduce((sum, check) => sum + check.score, 0) / processingIntegrityChecks.length;
+
+  // Calculate confidentiality score
+  const confidentialityChecks = Object.values(checklist.confidentiality);
+  scores.confidentiality = confidentialityChecks.reduce((sum, check) => sum + check.score, 0) / confidentialityChecks.length;
+
+  // Calculate privacy score
+  const privacyChecks = Object.values(checklist.privacy);
+  scores.privacy = privacyChecks.reduce((sum, check) => sum + check.score, 0) / privacyChecks.length;
+
+  // Calculate overall score (weighted average)
+  scores.overall = (
+    scores.security * 0.4 +
+    scores.availability * 0.2 +
+    scores.processing_integrity * 0.2 +
+    scores.confidentiality * 0.15 +
+    scores.privacy * 0.05
+  );
+
+  return scores;
+}
+
+function generateSOC2Recommendations(checklist, scores) {
+  const recommendations = [];
+
+  // Generate recommendations based on scores
+  if (scores.security < 80) {
+    recommendations.push('Focus on improving security controls, especially secrets management and access controls');
+  }
+
+  if (scores.availability < 80) {
+    recommendations.push('Improve availability controls, including monitoring and disaster recovery');
+  }
+
+  if (scores.processing_integrity < 80) {
+    recommendations.push('Enhance processing integrity through better CI/CD and change management');
+  }
+
+  if (scores.confidentiality < 80) {
+    recommendations.push('Strengthen confidentiality controls, particularly encryption and access restrictions');
+  }
+
+  if (scores.privacy < 80) {
+    recommendations.push('Implement privacy controls for data minimization and user consent');
+  }
+
+  // Add specific recommendations from failed checks
+  for (const category of Object.values(checklist)) {
+    for (const check of Object.values(category)) {
+      if (check.status === 'FAIL') {
+        recommendations.push(...check.recommendations);
+      }
+    }
+  }
+
+  return recommendations;
+}
 
 module.exports = {
   parseAlign,
   parseValue,
+  loadSchema,
   validateConfig,
   mergeConfigs,
-  loadSchema,
   performSmartAnalysis,
   diagnoseConfig,
   repairConfig,
-  findTypeIssues,
-  findSecurityIssues,
-  generateStrongSecret,
-  // Package schema and namespacing support
   discoverPackageSchemas,
   mergePackageSchemas,
-  parseNamespacedKey,
   resolveConfigContext,
   validateWithPackageSchemas,
   explainConfigValue,
   listAvailableSchemas,
-  // Cross-language export functions
   exportToPython,
   exportToTOML,
   exportToProperties,
   exportToHCL,
   exportToINI,
   exportToXML,
-  // Policy validation functions
-  validatePolicies,
-  loadPolicies,
-  suggestPolicies,
-  inferSchema,
-  inferType,
-  isUrl,
-  isEmail,
-  inferSchemaFromFiles,
-  generateAlignContent,
-  extractModuleConfig,
-  discoverModuleSchemas,
-  generateModuleConfig,
-  validateModuleConfig,
   exportToJSONWithComments,
   exportToYAMLWithComments,
   exportToPythonWithComments,
@@ -5562,7 +6545,24 @@ module.exports = {
   exportToHCLWithComments,
   exportToINIWithComments,
   exportToXMLWithComments,
+  validatePolicies,
+  loadPolicies,
+  suggestPolicies,
+  inferSchema,
+  inferSchemaFromFiles,
+  generateAlignContent,
+  extractModuleConfig,
+  discoverModuleSchemas,
+  generateModuleConfig,
+  validateModuleConfig,
   lintConfig,
+  detectUnusedFields,
+  detectOverlyPermissivePatterns,
+  detectConflictingDefaults,
+  suggestBestPractices,
+  suggestSecurityBestPractices,
+  suggestPerformanceBestPractices,
+  suggestConfigurationBestPractices,
   applyLintFixes,
   writeFixedConfig,
   detectSensitiveFields,
@@ -5572,8 +6572,12 @@ module.exports = {
   integrateWithVault,
   explainWithSecrets,
   validateSecretsWithExternal,
+  generateGitHubActions,
+  generateGitLabCI,
+  generateJenkinsPipeline,
+  generateCircleCI,
+  generateAzureDevOps,
   generateCIConfig,
-  // Versioning support functions
   addVersionToSchema,
   addVersionToConfig,
   getSchemaVersion,
@@ -5586,34 +6590,28 @@ module.exports = {
   bumpSchemaVersion,
   bumpConfigVersion,
   validateMigrationCompatibility,
-  // Angular and .env migration functions
   extractAngularEnvironmentVars,
   generateSchemaFromAngular,
   generateBaseAlignFromAngular,
   parseEnvFile,
   generateSchemaFromEnvVars,
   generateAlignFromEnvVars,
-  // GCP Secret Manager integration functions
   initializeGCPSecretManager,
   fetchSecretFromGCP,
   listGCPSecrets,
   resolveGCPSecrets,
   validateGCPSecrets,
-  // Multi-service configuration functions
   loadServiceSpecificConfig,
-  // Enhanced CI/CD functions
   generateGitHubActionsWithSecrets,
-  // Secret rotation functions
   rotateGCPSecret,
   scheduleSecretRotation,
   listSecretRotations,
-  // Configuration analytics functions
   analyzeConfigurationUsage,
-  // Team collaboration functions
   createEnvironmentShare,
   createEnvironmentReview,
   lockEnvironment,
   unlockEnvironment,
-  parseDuration
+  parseDuration,
+  generateSOC2Checklist
 };
   
