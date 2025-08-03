@@ -6612,6 +6612,13 @@ module.exports = {
   lockEnvironment,
   unlockEnvironment,
   parseDuration,
-  generateSOC2Checklist
+  generateSOC2Checklist,
+  // Test functions (not used in CLI but needed for tests)
+  findTypeIssues,
+  findSecurityIssues,
+  generateStrongSecret,
+  parseNamespacedKey,
+  isUrl,
+  isEmail
 };
   
