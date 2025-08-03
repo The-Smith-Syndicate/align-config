@@ -1,5 +1,23 @@
 #!/usr/bin/env node
-const { parseAlign, validateConfig, mergeConfigs, loadSchema, performSmartAnalysis } = require('./parser');
+const { 
+  parseAlign, 
+  validateConfig, 
+  mergeConfigs, 
+  loadSchema, 
+  performSmartAnalysis,
+  discoverPackageSchemas,
+  mergePackageSchemas,
+  validateWithPackageSchemas,
+  explainConfigValue,
+  listAvailableSchemas,
+  // Cross-language export functions
+  exportToPython,
+  exportToTOML,
+  exportToProperties,
+  exportToHCL,
+  exportToINI,
+  exportToXML
+} = require('./parser');
 const { Command } = require('commander');
 const chalk = require('chalk');
 const fs = require('fs');
@@ -7,7 +25,7 @@ const path = require('path');
 const yaml = require('js-yaml');
 
 const program = new Command();
-program.name('align').description('Align config CLI').version('0.1.0');
+program.name('align').description('Align config CLI').version('1.0.1');
 
 // INIT COMMAND
 program
@@ -91,6 +109,8 @@ program
   .description('Validate a .align config file')
   .option('--base', 'Treat as base config (validate required fields)')
   .option('--schema <file>', 'Schema file path (align.schema.json)')
+  .option('--include-packages', 'Include package schemas from node_modules')
+  .option('--project-dir <dir>', 'Project root directory (for package discovery)', '.')
   .action((filePath, options) => {
     try {
       const absPath = path.resolve(filePath);
@@ -103,24 +123,41 @@ program
       const content = fs.readFileSync(absPath, 'utf-8');
       const parsed = parseAlign(content);
       
-      // Load schema if provided
-      let schema = null;
+      // Load project schema if provided
+      let projectSchema = null;
       if (options.schema) {
         const schemaPath = path.resolve(options.schema);
-        schema = loadSchema(schemaPath);
-        if (schema) {
-          console.log(chalk.blue(`📋 Using schema: ${schemaPath}`));
+        projectSchema = loadSchema(schemaPath);
+        if (projectSchema) {
+          console.log(chalk.blue(`📋 Using project schema: ${schemaPath}`));
         }
       } else {
         // Try to find align.schema.json in the same directory
         const defaultSchemaPath = path.join(path.dirname(absPath), 'align.schema.json');
-        schema = loadSchema(defaultSchemaPath);
-        if (schema) {
-          console.log(chalk.blue(`📋 Using schema: ${defaultSchemaPath}`));
+        projectSchema = loadSchema(defaultSchemaPath);
+        if (projectSchema) {
+          console.log(chalk.blue(`📋 Using project schema: ${defaultSchemaPath}`));
         }
       }
       
-      const errors = validateConfig(parsed, options.base, schema);
+      // Load package schemas if requested
+      let packageSchemas = {};
+      if (options.includePackages) {
+        const projectDir = path.resolve(options.projectDir);
+        packageSchemas = discoverPackageSchemas(projectDir);
+        
+        if (Object.keys(packageSchemas).length > 0) {
+          console.log(chalk.blue(`📦 Found ${Object.keys(packageSchemas).length} package schemas:`));
+          Object.keys(packageSchemas).forEach(pkg => {
+            console.log(chalk.gray(`  - ${pkg}`));
+          });
+        } else {
+          console.log(chalk.gray(`📦 No package schemas found in ${projectDir}/node_modules`));
+        }
+      }
+      
+      // Validate with merged schemas
+      const errors = validateWithPackageSchemas(parsed, projectSchema || {}, packageSchemas);
 
       if (errors.length > 0) {
         console.log(chalk.red('❌ Validation failed:\n'));
@@ -129,6 +166,10 @@ program
       } else {
         console.log(chalk.green('✅ Validation passed: config is valid!'));
         console.log(chalk.gray(`Found ${Object.keys(parsed).length} configuration keys`));
+        
+        if (options.includePackages && Object.keys(packageSchemas).length > 0) {
+          console.log(chalk.gray(`Validated against ${Object.keys(packageSchemas).length} package schemas`));
+        }
       }
     } catch (err) {
       console.error(chalk.red('❌ Parse error:'), err.message);
@@ -143,7 +184,7 @@ program
   .requiredOption('--env <environment>', 'Environment name (e.g., dev, prod)')
   .option('--out <file>', 'Output file path', './output/config.json')
   .option('--config-dir <dir>', 'Configuration directory', './config')
-  .option('--format <format>', 'Output format (json, yaml)', 'json')
+  .option('--format <format>', 'Output format (json, yaml, env, python, toml, properties, hcl, ini, xml)', 'json')
   .option('--schema <file>', 'Schema file path (align.schema.json)')
   .option('--k8s-configmap', 'Generate Kubernetes ConfigMap YAML')
   .action((options) => {
@@ -154,8 +195,9 @@ program
       const outPath = path.resolve(options.out);
 
       // Validate format
-      if (!['json', 'yaml', 'env'].includes(options.format)) {
-        console.error(chalk.red(`❌ Invalid format: ${options.format}. Supported: json, yaml, env`));
+      const supportedFormats = ['json', 'yaml', 'env', 'python', 'toml', 'properties', 'hcl', 'ini', 'xml'];
+      if (!supportedFormats.includes(options.format)) {
+        console.error(chalk.red(`❌ Invalid format: ${options.format}. Supported: ${supportedFormats.join(', ')}`));
         process.exit(1);
       }
 
@@ -265,6 +307,24 @@ program
           })
           .join('\n');
         fileExtension = '.env';
+      } else if (options.format === 'python') {
+        output = exportToPython(mergedConfig);
+        fileExtension = '.py';
+      } else if (options.format === 'toml') {
+        output = exportToTOML(mergedConfig);
+        fileExtension = '.toml';
+      } else if (options.format === 'properties') {
+        output = exportToProperties(mergedConfig);
+        fileExtension = '.properties';
+      } else if (options.format === 'hcl') {
+        output = exportToHCL(mergedConfig);
+        fileExtension = '.tf';
+      } else if (options.format === 'ini') {
+        output = exportToINI(mergedConfig);
+        fileExtension = '.ini';
+      } else if (options.format === 'xml') {
+        output = exportToXML(mergedConfig);
+        fileExtension = '.xml';
       } else {
         output = JSON.stringify(mergedConfig, null, 2);
         fileExtension = '.json';
@@ -402,9 +462,12 @@ program
   .requiredOption('--key <key>', 'Configuration key to trace')
   .requiredOption('--env <environment>', 'Environment name (e.g., dev, prod)')
   .option('--config-dir <dir>', 'Configuration directory', './config')
-  .action((options) => {
+  .option('--project-dir <dir>', 'Project root directory (for package schemas)', '.')
+  .option('--include-packages', 'Include package schema information')
+  .action(async (options) => {
     try {
       const configDir = path.resolve(options.configDir);
+      const projectDir = path.resolve(options.projectDir);
       const basePath = path.join(configDir, 'base.align');
       const envPath = path.join(configDir, `${options.env}.align`);
 
@@ -449,6 +512,32 @@ program
 
       console.log(chalk.green(`📊 Final value: ${JSON.stringify(finalValue)}`));
       console.log('');
+
+      // Load package schemas if requested
+      if (options.includePackages) {
+        const packageSchemas = discoverPackageSchemas(projectDir);
+        const projectSchema = loadSchema(path.join(configDir, 'align.schema.json')) || {};
+        const mergedSchemas = mergePackageSchemas(projectSchema, packageSchemas);
+        const explanation = explainConfigValue(options.key, mergedConfig, mergedSchemas);
+        
+        if (explanation.package) {
+          console.log(chalk.cyan(`📦 Package: ${explanation.package}`));
+        }
+        
+        if (explanation.namespace) {
+          console.log(chalk.cyan(`🏷️  Namespace: ${explanation.namespace}`));
+        }
+        
+        if (explanation.validation) {
+          console.log(chalk.gray(`🔍 Validation:`));
+          console.log(chalk.gray(`  Type: ${explanation.validation.type}`));
+          console.log(chalk.gray(`  Required: ${explanation.validation.required}`));
+          if (explanation.validation.default !== undefined) {
+            console.log(chalk.gray(`  Default: ${explanation.validation.default}`));
+          }
+        }
+        console.log('');
+      }
 
       // Trace the origin
       const baseValue = baseConfig[options.key];
@@ -619,6 +708,120 @@ program
     }
   });
 
+program
+  .command('diagnose')
+  .description('Diagnose configuration environment for issues and inconsistencies')
+  .option('--config-dir <dir>', 'Configuration directory to analyze', './config')
+  .option('--project-dir <dir>', 'Project root directory to scan', '.')
+  .option('--detailed', 'Show detailed analysis with file paths')
+  .option('--format <format>', 'Output format (text, json)', 'text')
+  .option('--generate-plan', 'Generate migration plan for align repair')
+  .action((options) => {
+    try {
+      const { diagnoseConfig } = require('./parser.js');
+      const projectDir = path.resolve(options.projectDir);
+      const configDir = path.resolve(options.configDir);
+      
+      console.log(chalk.blue('🔍 Diagnosing configuration environment...'));
+      console.log(chalk.gray(`📁 Project directory: ${projectDir}`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}`));
+      console.log('');
+
+      const diagnosis = diagnoseConfig(projectDir, configDir, options.detailed);
+      
+      if (options.format === 'json') {
+        console.log(JSON.stringify(diagnosis, null, 2));
+      } else {
+        displayDiagnosisResults(diagnosis, options.generatePlan);
+      }
+
+      // Exit with appropriate code
+      if (diagnosis.criticalIssues.length > 0) {
+        process.exit(1);
+      } else if (diagnosis.warnings.length > 0) {
+        process.exit(0);
+      } else {
+        process.exit(0);
+      }
+    } catch (err) {
+      console.error(chalk.red('❌ Diagnosis error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('repair')
+  .description('Automatically fix configuration issues with safety features')
+  .option('--config-dir <dir>', 'Configuration directory to analyze', './config')
+  .option('--project-dir <dir>', 'Project root directory to scan', '.')
+  .option('--backup', 'Create backup before making changes')
+  .option('--dry-run', 'Show what would change without making changes')
+  .option('--interactive', 'Ask for confirmation before each change')
+  .option('--auto', 'Automatically apply all safe fixes')
+  .option('--analyze-only', 'Show detailed migration plan without changes')
+  .option('--rollback', 'Restore from backup (use with --backup-dir)')
+  .option('--backup-dir <dir>', 'Backup directory for rollback')
+  .option('--fix-types', 'Only fix type safety issues')
+  .option('--consolidate-configs', 'Only consolidate scattered configs')
+  .option('--fix-security', 'Only fix security issues')
+  .option('--detailed', 'Show detailed information about changes')
+  .action((options) => {
+    try {
+      const { repairConfig } = require('./parser.js');
+      const projectDir = path.resolve(options.projectDir);
+      const configDir = path.resolve(options.configDir);
+      
+      console.log(chalk.blue('🔧 Align Repair - Configuration Migration Tool'));
+      console.log(chalk.gray(`📁 Project directory: ${projectDir}`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}`));
+      console.log('');
+
+      // Handle rollback
+      if (options.rollback) {
+        if (!options.backupDir) {
+          console.error(chalk.red('❌ Error: --backup-dir required for rollback'));
+          process.exit(1);
+        }
+        
+        const rollbackResult = repairConfig.rollback(options.backupDir);
+        if (rollbackResult.success) {
+          console.log(chalk.green('✅ Rollback completed successfully!'));
+        } else {
+          console.error(chalk.red('❌ Rollback failed:'), rollbackResult.error);
+          process.exit(1);
+        }
+        return;
+      }
+
+      // Run repair with safety options
+      const repairResult = repairConfig(projectDir, configDir, options);
+      
+      if (repairResult.success) {
+        console.log(chalk.green('✅ Repair completed successfully!'));
+        
+        if (repairResult.backupCreated) {
+          console.log(chalk.cyan(`📦 Backup created: ${repairResult.backupDir}`));
+          console.log(chalk.gray('💡 Use "align repair --rollback --backup-dir=' + repairResult.backupDir + '" to undo'));
+        }
+        
+        if (repairResult.changesMade) {
+          console.log(chalk.green(`📝 ${repairResult.changesMade} changes applied`));
+        }
+        
+        if (repairResult.filesCreated) {
+          console.log(chalk.green(`📁 ${repairResult.filesCreated} files created`));
+        }
+      } else {
+        console.error(chalk.red('❌ Repair failed:'), repairResult.error);
+        process.exit(1);
+      }
+
+    } catch (err) {
+      console.error(chalk.red('❌ Repair error:'), err.message);
+      process.exit(1);
+    }
+  });
+
 // Helper function to generate Kubernetes ConfigMap YAML
 function generateK8sConfigMap(config, environment) {
   const appName = config.app_name || 'myapp';
@@ -782,5 +985,214 @@ function displayAnalysisResults(analysis, detailed = false) {
   console.log('');
   console.log(chalk.gray('💡 Use --detailed flag for more information about each issue.'));
 }
+
+// Helper function to display diagnosis results
+function displayDiagnosisResults(diagnosis, generatePlan = false) {
+  const { criticalIssues, warnings, recommendations, summary, migrationPlan } = diagnosis;
+  
+  // Display summary
+  console.log(chalk.blue('📊 Diagnosis Summary:'));
+  console.log(chalk.gray(`  Total Issues: ${criticalIssues.length + warnings.length}`));
+  console.log(chalk.red(`  Critical Issues: ${criticalIssues.length}`));
+  console.log(chalk.yellow(`  Warnings: ${warnings.length}`));
+  console.log(chalk.green(`  Recommendations: ${recommendations.length}`));
+  console.log('');
+
+  // Display critical issues
+  if (criticalIssues.length > 0) {
+    console.log(chalk.red('🚨 Critical Issues:'));
+    criticalIssues.forEach((issue, index) => {
+      console.log(chalk.red(`  ${index + 1}. ${issue.title}`));
+      console.log(chalk.gray(`     ${issue.description}`));
+      if (issue.impact) {
+        console.log(chalk.gray(`     Impact: ${issue.impact}`));
+      }
+      if (issue.files && issue.files.length > 0) {
+        console.log(chalk.gray(`     Files: ${issue.files.join(', ')}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display warnings
+  if (warnings.length > 0) {
+    console.log(chalk.yellow('⚠️  Warnings:'));
+    warnings.forEach((warning, index) => {
+      console.log(chalk.yellow(`  ${index + 1}. ${warning.title}`));
+      console.log(chalk.gray(`     ${warning.description}`));
+      if (warning.impact) {
+        console.log(chalk.gray(`     Impact: ${warning.impact}`));
+      }
+      if (warning.files && warning.files.length > 0) {
+        console.log(chalk.gray(`     Files: ${warning.files.join(', ')}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display recommendations
+  if (recommendations.length > 0) {
+    console.log(chalk.green('✅ Recommendations:'));
+    recommendations.forEach((rec, index) => {
+      console.log(chalk.green(`  ${index + 1}. ${rec.title}`));
+      console.log(chalk.gray(`     ${rec.description}`));
+      if (rec.command) {
+        console.log(chalk.cyan(`     Command: ${rec.command}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display migration plan if requested
+  if (generatePlan && migrationPlan) {
+    console.log(chalk.blue('📋 Migration Plan:'));
+    console.log(chalk.gray('  Run "align repair" to automatically fix these issues:'));
+    console.log('');
+    
+    if (migrationPlan.consolidateFiles) {
+      console.log(chalk.cyan('  📁 Consolidate scattered configs:'));
+      migrationPlan.consolidateFiles.forEach(file => {
+        console.log(chalk.gray(`    - ${file.source} → ${file.target}`));
+      });
+      console.log('');
+    }
+
+    if (migrationPlan.fixTypes) {
+      console.log(chalk.cyan('  🔧 Fix type issues:'));
+      migrationPlan.fixTypes.forEach(fix => {
+        console.log(chalk.gray(`    - ${fix.key}: "${fix.current}" → ${fix.fixed}`));
+      });
+      console.log('');
+    }
+
+    if (migrationPlan.securityFixes) {
+      console.log(chalk.cyan('  🔒 Fix security issues:'));
+      migrationPlan.securityFixes.forEach(fix => {
+        console.log(chalk.gray(`    - ${fix.issue}: ${fix.fix}`));
+      });
+      console.log('');
+    }
+
+    if (migrationPlan.createEnvironments) {
+      console.log(chalk.cyan('  📋 Create environment structure:'));
+      migrationPlan.createEnvironments.forEach(env => {
+        console.log(chalk.gray(`    - ${env.file} with ${env.keys.length} keys`));
+      });
+      console.log('');
+    }
+  }
+
+  // Display summary
+  console.log(chalk.blue('📈 Summary:'));
+  console.log(chalk.gray(`  ${summary.totalFiles} configuration files found`));
+  console.log(chalk.gray(`  ${summary.totalKeys} configuration keys analyzed`));
+  console.log(chalk.gray(`  ${summary.environments} environments detected`));
+  console.log(chalk.gray(`  ${summary.platforms} deployment platforms found`));
+  
+  if (criticalIssues.length === 0 && warnings.length === 0) {
+    console.log(chalk.green('\n✅ No issues found! Your configuration is well-organized.'));
+  } else {
+    console.log(chalk.yellow('\n💡 Run "align repair" to automatically fix these issues.'));
+  }
+}
+
+// PACKAGE SCHEMA COMMANDS
+program
+  .command('discover-packages')
+  .description('Discover and list available package schemas from node_modules')
+  .option('--project-dir <dir>', 'Project root directory', '.')
+  .option('--format <format>', 'Output format (text, json)', 'text')
+  .action((options) => {
+    try {
+      const projectDir = path.resolve(options.projectDir);
+      
+      console.log(chalk.blue('🔍 Discovering package schemas...'));
+      console.log(chalk.gray(`📁 Project directory: ${projectDir}\n`));
+
+      const packageSchemas = discoverPackageSchemas(projectDir);
+      const schemas = listAvailableSchemas({}, packageSchemas);
+      
+      if (options.format === 'json') {
+        console.log(JSON.stringify(schemas, null, 2));
+      } else {
+        console.log(chalk.green('📦 Package Schemas Found:'));
+        
+        if (Object.keys(schemas.packages).length === 0) {
+          console.log(chalk.gray('  No package schemas found in node_modules'));
+        } else {
+          for (const [packageName, keys] of Object.entries(schemas.packages)) {
+            console.log(chalk.cyan(`  ${packageName}:`));
+            keys.forEach(key => {
+              console.log(chalk.gray(`    - ${key}`));
+            });
+            console.log('');
+          }
+        }
+        
+        console.log(chalk.blue('💡 Packages can provide schemas via:'));
+        console.log(chalk.gray('  - align.schema.json file in package root'));
+        console.log(chalk.gray('  - "align" field in package.json'));
+      }
+
+    } catch (err) {
+      console.error(chalk.red('❌ Package discovery error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+
+
+program
+  .command('list-schemas')
+  .description('List all available schemas (project + packages)')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--project-dir <dir>', 'Project root directory', '.')
+  .option('--format <format>', 'Output format (text, json)', 'text')
+  .action((options) => {
+    try {
+      const projectDir = path.resolve(options.projectDir);
+      const configDir = path.resolve(options.configDir);
+      
+      console.log(chalk.blue('📋 Available Schemas:'));
+      console.log(chalk.gray(`📁 Project directory: ${projectDir}`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}\n`));
+
+      // Load schemas
+      const projectSchema = loadSchema(path.join(configDir, 'align.schema.json')) || {};
+      const packageSchemas = discoverPackageSchemas(projectDir);
+      const schemas = listAvailableSchemas(projectSchema, packageSchemas);
+      
+      if (options.format === 'json') {
+        console.log(JSON.stringify(schemas, null, 2));
+      } else {
+        console.log(chalk.green('📁 Project Schema:'));
+        if (schemas.project.length === 0) {
+          console.log(chalk.gray('  No project schema found'));
+        } else {
+          schemas.project.forEach(key => {
+            console.log(chalk.gray(`  - ${key}`));
+          });
+        }
+        console.log('');
+        
+        console.log(chalk.green('📦 Package Schemas:'));
+        if (Object.keys(schemas.packages).length === 0) {
+          console.log(chalk.gray('  No package schemas found'));
+        } else {
+          for (const [packageName, keys] of Object.entries(schemas.packages)) {
+            console.log(chalk.cyan(`  ${packageName}:`));
+            keys.forEach(key => {
+              console.log(chalk.gray(`    - ${key}`));
+            });
+            console.log('');
+          }
+        }
+      }
+
+    } catch (err) {
+      console.error(chalk.red('❌ Schema listing error:'), err.message);
+      process.exit(1);
+    }
+  });
 
 program.parse();

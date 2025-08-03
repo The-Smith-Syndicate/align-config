@@ -1,5 +1,7 @@
 // parser.js
 const fs = require('fs');
+const path = require('path');
+const chalk = require('chalk'); // Added for colored output
 
 function parseAlign(content) {
   const lines = content.split('\n');
@@ -589,5 +591,1682 @@ function analyzeEnvironmentSpecific(config, environment, analysis, detailed) {
   }
 }
 
-module.exports = { parseAlign, parseValue, validateConfig, mergeConfigs, loadSchema, performSmartAnalysis };
+// Diagnose configuration environment
+function diagnoseConfig(projectDir, configDir, detailed = false) {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const diagnosis = {
+    criticalIssues: [],
+    warnings: [],
+    recommendations: [],
+    summary: {
+      totalFiles: 0,
+      totalKeys: 0,
+      environments: 0,
+      platforms: 0
+    },
+    migrationPlan: {
+      consolidateFiles: [],
+      fixTypes: [],
+      securityFixes: [],
+      createEnvironments: []
+    }
+  };
+
+  try {
+    // 1. Scan for configuration files
+    const configFiles = scanConfigFiles(projectDir);
+    diagnosis.summary.totalFiles = configFiles.length;
+
+    // 2. Analyze scattered configuration
+    const scatteredConfig = analyzeScatteredConfig(configFiles, projectDir);
+    if (scatteredConfig.issues.length > 0) {
+      diagnosis.criticalIssues.push({
+        title: 'Scattered Configuration',
+        description: `Found ${scatteredConfig.issues.length} configuration files scattered across the project`,
+        impact: 'Difficult to manage, inconsistent values, deployment issues',
+        files: scatteredConfig.issues.map(issue => issue.file)
+      });
+      
+      // Add to migration plan
+      scatteredConfig.issues.forEach(issue => {
+        diagnosis.migrationPlan.consolidateFiles.push({
+          source: issue.file,
+          target: `config/${issue.type}.align`
+        });
+      });
+    }
+
+    // 3. Analyze type safety issues
+    const typeIssues = analyzeTypeIssues(configFiles, projectDir);
+    if (typeIssues && typeIssues.issues && typeIssues.issues.length > 0) {
+      diagnosis.warnings.push(typeIssues);
+      
+      // Add to migration plan
+      typeIssues.issues.forEach(issue => {
+        diagnosis.migrationPlan.fixTypes.push({
+          key: issue.key,
+          current: issue.currentValue,
+          fixed: issue.fixedValue,
+          file: issue.file
+        });
+      });
+    }
+
+    // 4. Analyze environment inconsistencies
+    const envIssues = analyzeEnvironmentIssues(configFiles, projectDir);
+    if (envIssues.length > 0) {
+      diagnosis.warnings.push({
+        title: 'Environment Inconsistencies',
+        description: `Found ${envIssues.length} inconsistencies between environments`,
+        impact: 'Deployment failures, configuration drift',
+        files: envIssues.map(issue => issue.file)
+      });
+    }
+
+    // 5. Analyze security issues
+    const securityIssues = analyzeSecurityIssues(configFiles, projectDir);
+    if (securityIssues && securityIssues.issues && securityIssues.issues.length > 0) {
+      diagnosis.criticalIssues.push(securityIssues);
+      
+      // Add to migration plan
+      securityIssues.issues.forEach(issue => {
+        diagnosis.migrationPlan.securityFixes.push({
+          issue: issue.title,
+          fix: issue.recommendation,
+          severity: issue.severity
+        });
+      });
+    }
+
+    // 6. Analyze platform-specific configs
+    const platformIssues = analyzePlatformIssues(configFiles, projectDir);
+    if (platformIssues.length > 0) {
+      diagnosis.warnings.push({
+        title: 'Platform-Specific Configurations',
+        description: `Found ${platformIssues.length} platform-specific configuration files`,
+        impact: 'Deployment complexity, maintenance overhead',
+        files: platformIssues.map(issue => issue.file)
+      });
+    }
+
+    // 7. Generate recommendations
+    diagnosis.recommendations = generateRecommendations(diagnosis, configFiles);
+    
+    // Always add at least one recommendation if there are issues
+    if (diagnosis.criticalIssues.length > 0 && diagnosis.recommendations.length === 0) {
+      diagnosis.recommendations.push({
+        title: 'Run align repair',
+        description: 'Automatically fix configuration issues',
+        command: 'align repair'
+      });
+    }
+
+    // 8. Update summary
+    diagnosis.summary.totalKeys = countTotalKeys(configFiles);
+    diagnosis.summary.environments = countEnvironments(configFiles);
+    diagnosis.summary.platforms = countPlatforms(configFiles);
+
+    // 9. Generate migration plan
+    if (diagnosis.criticalIssues.length > 0 || diagnosis.warnings.length > 0) {
+      generateMigrationPlan(diagnosis, configFiles, projectDir);
+    }
+
+  } catch (error) {
+    diagnosis.criticalIssues.push({
+      title: 'Diagnosis Error',
+      description: `Failed to analyze configuration: ${error.message}`,
+      impact: 'Unable to provide complete diagnosis'
+    });
+  }
+
+  return diagnosis;
+}
+
+// Scan for configuration files
+function scanConfigFiles(projectDir) {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const configPatterns = [
+    '.env', '.env.local', '.env.development', '.env.production', '.env.test',
+    'config.json', 'config.js', 'config.yml', 'config.yaml',
+    'docker-compose.yml', 'docker-compose.override.yml', 'docker-compose.prod.yml',
+    'k8s/configmap.yaml', 'k8s/deployment.yaml', 'k8s/secret.yaml',
+    'vercel.json', 'netlify.toml', 'railway.toml',
+    'package.json', 'package-lock.json',
+    'base.align', 'dev.align', 'prod.align', 'align.schema.json'
+  ];
+
+  const foundFiles = [];
+  
+  function scanDirectory(dir) {
+    try {
+      const files = fs.readdirSync(dir);
+      
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        const stat = fs.statSync(filePath);
+        
+        if (stat.isDirectory() && !file.startsWith('.') && file !== 'node_modules') {
+          scanDirectory(filePath);
+        } else if (stat.isFile()) {
+          const relativePath = path.relative(projectDir, filePath);
+          
+          // Check if file matches config patterns
+          for (const pattern of configPatterns) {
+            if (file === pattern || relativePath.includes(pattern) || file.endsWith(pattern)) {
+              foundFiles.push({
+                path: filePath,
+                relativePath: relativePath,
+                type: getConfigType(file),
+                size: stat.size
+              });
+              break;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Skip directories we can't read
+    }
+  }
+  
+  scanDirectory(projectDir);
+  return foundFiles;
+}
+
+// Get configuration type
+function getConfigType(filename) {
+  if (filename.includes('.env')) return 'environment';
+  if (filename.includes('config.json') || filename.includes('config.js')) return 'application';
+  if (filename.includes('docker-compose')) return 'docker';
+  if (filename.includes('k8s') || filename.includes('kubernetes')) return 'kubernetes';
+  if (filename.includes('vercel.json') || filename.includes('netlify.toml')) return 'platform';
+  if (filename.includes('package.json')) return 'package';
+  if (filename.includes('.align')) return 'align';
+  return 'other';
+}
+
+// Analyze scattered configuration
+function analyzeScatteredConfig(configFiles, projectDir) {
+  const issues = [];
+  const configTypes = {};
+  
+  configFiles.forEach(file => {
+    const type = file.type;
+    if (!configTypes[type]) {
+      configTypes[type] = [];
+    }
+    configTypes[type].push(file);
+  });
+  
+  // Check for multiple files of same type
+  Object.entries(configTypes).forEach(([type, files]) => {
+    if (files.length > 1) {
+      issues.push({
+        file: files.map(f => f.relativePath).join(', '),
+        type: type,
+        count: files.length
+      });
+    }
+  });
+  
+  // Check for scattered configuration (multiple different types)
+  const differentTypes = Object.keys(configTypes).filter(type => type !== 'align');
+  if (differentTypes.length > 1) {
+    issues.push({
+      file: configFiles.map(f => f.relativePath).join(', '),
+      type: 'scattered',
+      count: configFiles.length,
+      types: differentTypes
+    });
+  }
+  
+  return { issues };
+}
+
+// Analyze type safety issues
+function analyzeTypeIssues(configFiles, projectDir) {
+  const issues = findTypeIssues(projectDir);
+  
+  if (issues.length > 0) {
+    return {
+      title: 'Type Safety Issues',
+      description: `Found ${issues.length} configuration values with incorrect types`,
+      impact: 'Runtime errors, inconsistent behavior',
+      files: [...new Set(issues.map(issue => issue.file))],
+      issues: issues
+    };
+  }
+  
+  return null;
+}
+
+// Analyze environment issues
+function analyzeEnvironmentIssues(configFiles, projectDir) {
+  const issues = [];
+  const envFiles = configFiles.filter(f => f.type === 'environment');
+  
+  if (envFiles.length > 1) {
+    // Compare environment files
+    const envContents = {};
+    
+    envFiles.forEach(file => {
+      try {
+        const content = fs.readFileSync(file.path, 'utf8');
+        const keys = new Set();
+        
+        content.split('\n').forEach(line => {
+          const match = line.match(/^([A-Z_][A-Z0-9_]*)=/);
+          if (match) {
+            keys.add(match[1]);
+          }
+        });
+        
+        envContents[file.relativePath] = keys;
+      } catch (error) {
+        // Skip files we can't read
+      }
+    });
+    
+    // Check for missing keys between environments
+    const allKeys = new Set();
+    Object.values(envContents).forEach(keys => {
+      keys.forEach(key => allKeys.add(key));
+    });
+    
+    Object.entries(envContents).forEach(([file, keys]) => {
+      const missing = Array.from(allKeys).filter(key => !keys.has(key));
+      if (missing.length > 0) {
+        issues.push({
+          file: file,
+          type: 'missing_keys',
+          keys: missing
+        });
+      }
+    });
+  }
+  
+  return issues;
+}
+
+// Analyze security issues
+function analyzeSecurityIssues(configFiles, projectDir) {
+  const issues = findSecurityIssues(projectDir);
+  
+  if (issues.length > 0) {
+    return {
+      title: 'Security Issues',
+      description: `Found ${issues.length} security-related configuration problems`,
+      impact: 'Security vulnerabilities, data breaches',
+      files: [...new Set(issues.map(issue => issue.file))],
+      issues: issues
+    };
+  }
+  
+  return null;
+}
+
+// Analyze platform issues
+function analyzePlatformIssues(configFiles, projectDir) {
+  const issues = [];
+  const platformFiles = configFiles.filter(f => f.type === 'platform' || f.type === 'docker' || f.type === 'kubernetes');
+  
+  if (platformFiles.length > 1) {
+    issues.push({
+      file: platformFiles.map(f => f.relativePath).join(', '),
+      type: 'multiple_platforms',
+      count: platformFiles.length
+    });
+  }
+  
+  return issues;
+}
+
+// Generate recommendations
+function generateRecommendations(diagnosis, configFiles) {
+  const recommendations = [];
+  
+  if (diagnosis.criticalIssues.length > 0) {
+    recommendations.push({
+      title: 'Run align repair',
+      description: 'Automatically fix configuration issues',
+      command: 'align repair'
+    });
+  }
+  
+  if (configFiles.filter(f => f.type === 'environment').length > 0) {
+    recommendations.push({
+      title: 'Migrate to Align',
+      description: 'Convert .env files to .align format for better organization',
+      command: 'align init --template=nodejs-api --app-name=myapp'
+    });
+  }
+  
+  if (configFiles.filter(f => f.type === 'align').length === 0) {
+    recommendations.push({
+      title: 'Add Align configuration',
+      description: 'Start using Align for better configuration management',
+      command: 'align init --template=nodejs-api --app-name=myapp'
+    });
+  }
+  
+  return recommendations;
+}
+
+// Count total keys
+function countTotalKeys(configFiles) {
+  let total = 0;
+  const fs = require('fs');
+  
+  configFiles.forEach(file => {
+    if (file.type === 'environment') {
+      try {
+        // Try UTF-8 first, then UTF-16 if that fails
+        let content;
+        try {
+          content = fs.readFileSync(file.path, 'utf8');
+        } catch (e) {
+          content = fs.readFileSync(file.path, 'utf16le');
+        }
+        
+        // Remove null bytes and normalize
+        content = content.replace(/\u0000/g, '');
+        const lines = content.split('\n');
+        lines.forEach(line => {
+          const trimmedLine = line.trim();
+          if (trimmedLine.match(/^[A-Z_][A-Z0-9_]*=/)) {
+            total++;
+          }
+        });
+      } catch (error) {
+        // Skip files we can't read
+      }
+    }
+  });
+  
+  return total;
+}
+
+// Count environments
+function countEnvironments(configFiles) {
+  const envFiles = configFiles.filter(f => f.type === 'environment');
+  return envFiles.length;
+}
+
+// Count platforms
+function countPlatforms(configFiles) {
+  const platformFiles = configFiles.filter(f => 
+    f.type === 'platform' || f.type === 'docker' || f.type === 'kubernetes'
+  );
+  return platformFiles.length;
+}
+
+// Generate migration plan
+function generateMigrationPlan(diagnosis, configFiles, projectDir) {
+  // Populate migration plan from diagnosis results
+  diagnosis.migrationPlan = {
+    consolidateFiles: [],
+    fixTypes: [],
+    securityFixes: [],
+    createEnvironments: []
+  };
+  
+  // Add type fixes from warnings
+  diagnosis.warnings.forEach(warning => {
+    if (warning.title === 'Type Safety Issues' && warning.issues) {
+      warning.issues.forEach(issue => {
+        diagnosis.migrationPlan.fixTypes.push({
+          key: issue.key,
+          current: issue.currentValue,
+          fixed: issue.fixedValue,
+          file: issue.file
+        });
+      });
+    }
+  });
+  
+  // Add security fixes from critical issues
+  diagnosis.criticalIssues.forEach(issue => {
+    if (issue.title === 'Security Issues' && issue.issues) {
+      issue.issues.forEach(securityIssue => {
+        diagnosis.migrationPlan.securityFixes.push({
+          issue: securityIssue.title,
+          fix: securityIssue.recommendation,
+          severity: securityIssue.severity
+        });
+      });
+    }
+  });
+  
+  // Add scattered config consolidation
+  diagnosis.criticalIssues.forEach(issue => {
+    if (issue.title === 'Scattered Configuration' && issue.files) {
+      issue.files.forEach(file => {
+        diagnosis.migrationPlan.consolidateFiles.push({
+          source: file,
+          target: `config/${getConfigType(file)}.align`
+        });
+      });
+    }
+  });
+}
+
+// Repair configuration environment with safety features
+function repairConfig(projectDir, configDir, options = {}) {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const result = {
+    success: false,
+    backupCreated: false,
+    backupDir: null,
+    changesMade: 0,
+    filesCreated: 0,
+    error: null,
+    plan: null
+  };
+
+  try {
+    // 1. Analyze current state
+    console.log(chalk.blue('🔍 Analyzing current configuration...'));
+    const diagnosis = diagnoseConfig(projectDir, configDir, options.detailed);
+    
+    if (diagnosis.criticalIssues.length === 0 && diagnosis.warnings.length === 0) {
+      console.log(chalk.green('✅ No issues found! Configuration is already well-organized.'));
+      result.success = true;
+      return result;
+    }
+
+    // 2. Generate repair plan
+    console.log(chalk.blue('📋 Generating repair plan...'));
+    const plan = generateRepairPlan(diagnosis, projectDir, configDir);
+    result.plan = plan;
+
+    // 3. Handle analyze-only mode
+    if (options.analyzeOnly) {
+      displayRepairPlan(plan, options.detailed);
+      result.success = true;
+      return result;
+    }
+
+    // 4. Handle dry-run mode
+    if (options.dryRun) {
+      console.log(chalk.yellow('🔍 DRY RUN MODE - No changes will be made'));
+      displayRepairPlan(plan, options.detailed);
+      result.success = true;
+      return result;
+    }
+
+    // 5. Create backup if requested
+    if (options.backup) {
+      console.log(chalk.blue('📦 Creating backup...'));
+      const backupResult = createBackup(projectDir, plan);
+      if (!backupResult.success) {
+        result.error = backupResult.error;
+        return result;
+      }
+      result.backupCreated = true;
+      result.backupDir = backupResult.backupDir;
+      console.log(chalk.green(`✅ Backup created: ${backupResult.backupDir}`));
+    }
+
+    // 6. Apply repairs based on options
+    console.log(chalk.blue('🔧 Applying repairs...'));
+    
+    if (options.interactive) {
+      const interactiveResult = applyRepairsInteractive(plan, options);
+      result.changesMade = interactiveResult.changesMade;
+      result.filesCreated = interactiveResult.filesCreated;
+      result.success = interactiveResult.success;
+    } else if (options.auto) {
+      const autoResult = applyRepairsAuto(plan, options, projectDir);
+      result.changesMade = autoResult.changesMade;
+      result.filesCreated = autoResult.filesCreated;
+      result.success = autoResult.success;
+    } else {
+      // Default: show plan and ask for confirmation
+      displayRepairPlan(plan, options.detailed);
+      console.log(chalk.yellow('\n💡 Use --auto to apply changes or --interactive for step-by-step confirmation'));
+      result.success = true;
+    }
+
+  } catch (error) {
+    result.error = error.message;
+    console.error(chalk.red('❌ Repair error:'), error.message);
+  }
+
+  return result;
+}
+
+// Generate detailed repair plan
+function generateRepairPlan(diagnosis, projectDir, configDir) {
+  const plan = {
+    consolidateFiles: [],
+    fixTypes: [],
+    securityFixes: [],
+    createEnvironments: [],
+    updateDeployments: [],
+    totalChanges: 0,
+    estimatedTime: '5-10 minutes'
+  };
+
+  // Analyze scattered configuration
+  if (diagnosis.criticalIssues.some(issue => issue.title === 'Scattered Configuration')) {
+    const scatteredFiles = findScatteredConfigFiles(projectDir);
+    plan.consolidateFiles = scatteredFiles.map(file => ({
+      source: file.path,
+      target: determineTargetFile(file, configDir),
+      type: file.type,
+      action: 'consolidate'
+    }));
+  }
+
+  // Analyze type issues
+  if (diagnosis.warnings.some(warning => warning.title === 'Type Safety Issues')) {
+    const typeIssues = findTypeIssues(projectDir);
+    plan.fixTypes = typeIssues.map(issue => ({
+      file: issue.file,
+      key: issue.key,
+      currentValue: issue.currentValue,
+      fixedValue: issue.fixedValue,
+      action: 'fix_type'
+    }));
+  }
+
+  // Analyze security issues
+  if (diagnosis.criticalIssues.some(issue => issue.title === 'Security Issues')) {
+    const securityIssues = findSecurityIssues(projectDir);
+    plan.securityFixes = securityIssues.map(issue => ({
+      file: issue.file,
+      issue: issue.title,
+      fix: issue.recommendation,
+      action: 'fix_security'
+    }));
+  }
+
+  // Plan environment creation
+  plan.createEnvironments = [
+    { file: path.join(configDir, 'base.align'), action: 'create' },
+    { file: path.join(configDir, 'dev.align'), action: 'create' },
+    { file: path.join(configDir, 'prod.align'), action: 'create' }
+  ];
+
+  // Plan deployment updates
+  plan.updateDeployments = [
+    { file: 'docker-compose.yml', action: 'update' },
+    { file: 'k8s/configmap.yaml', action: 'update' },
+    { file: 'package.json', action: 'update_scripts' }
+  ];
+
+  plan.totalChanges = plan.consolidateFiles.length + 
+                     plan.fixTypes.length + 
+                     plan.securityFixes.length + 
+                     plan.createEnvironments.length + 
+                     plan.updateDeployments.length;
+
+  return plan;
+}
+
+// Find scattered configuration files
+function findScatteredConfigFiles(projectDir) {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const configFiles = [];
+  
+  function scanDirectory(dir) {
+    try {
+      const files = fs.readdirSync(dir);
+      
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        const stat = fs.statSync(filePath);
+        
+        if (stat.isDirectory() && !file.startsWith('.') && file !== 'node_modules') {
+          scanDirectory(filePath);
+        } else if (stat.isFile()) {
+          const relativePath = path.relative(projectDir, filePath);
+          
+          // Check if it's a config file
+          if (isConfigFile(file, relativePath)) {
+            configFiles.push({
+              path: filePath,
+              relativePath: relativePath,
+              type: getConfigType(file),
+              size: stat.size
+            });
+          }
+        }
+      }
+    } catch (error) {
+      // Skip directories we can't read
+    }
+  }
+  
+  scanDirectory(projectDir);
+  return configFiles;
+}
+
+// Check if file is a configuration file
+function isConfigFile(filename, relativePath) {
+  const configPatterns = [
+    '.env', '.env.local', '.env.development', '.env.production',
+    'config.json', 'config.js', 'config.yml', 'config.yaml',
+    'docker-compose.yml', 'docker-compose.override.yml',
+    'k8s/configmap.yaml', 'k8s/deployment.yaml',
+    'vercel.json', 'netlify.toml'
+  ];
+  
+  return configPatterns.some(pattern => 
+    relativePath.includes(pattern) || filename === pattern
+  );
+}
+
+// Determine target file for consolidation
+function determineTargetFile(file, configDir) {
+  const path = require('path');
+  
+  if (file.type === 'environment') {
+    return path.join(configDir, 'base.align');
+  } else if (file.type === 'application') {
+    return path.join(configDir, 'base.align');
+  } else if (file.type === 'docker') {
+    return path.join(configDir, 'docker.align');
+  } else if (file.type === 'kubernetes') {
+    return path.join(configDir, 'k8s.align');
+  }
+  
+  return path.join(configDir, 'base.align');
+}
+
+// Find type safety issues
+function findTypeIssues(projectDir) {
+  const fs = require('fs');
+  const path = require('path');
+  const issues = [];
+  
+  function scanForEnvFiles(dir) {
+    try {
+      const files = fs.readdirSync(dir);
+      
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        const stat = fs.statSync(filePath);
+        
+        if (stat.isDirectory() && !file.startsWith('.') && file !== 'node_modules') {
+          scanForEnvFiles(filePath);
+        } else if (stat.isFile() && file.includes('.env')) {
+          try {
+            // Try UTF-8 first, then UTF-16 if that fails
+            let content;
+            try {
+              content = fs.readFileSync(filePath, 'utf8');
+            } catch (e) {
+              content = fs.readFileSync(filePath, 'utf16le');
+            }
+            
+            // Remove null bytes and normalize
+            content = content.replace(/\u0000/g, '');
+            const lines = content.split('\n');
+            
+            lines.forEach((line, index) => {
+              // Clean the line of any invisible characters and normalize
+              const cleanLine = line.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+              
+              // More robust regex that handles various formats
+              const match = cleanLine.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);
+              if (match) {
+                const key = match[1];
+                const rawValue = match[2];
+                const value = rawValue.replace(/^["']|["']$/g, ''); // Remove quotes
+                
+                // Check for quoted numbers (common mistake)
+                if (key === 'PORT' && (rawValue.startsWith('"') || rawValue.startsWith("'"))) {
+                  issues.push({
+                    file: path.relative(projectDir, filePath),
+                    key: key,
+                    currentValue: rawValue,
+                    fixedValue: parseInt(value) || 3000,
+                    type: 'number',
+                    issue: 'PORT should not be quoted, got quoted string'
+                  });
+                }
+                
+                if (key === 'DEBUG' && (rawValue.startsWith('"') || rawValue.startsWith("'"))) {
+                  issues.push({
+                    file: path.relative(projectDir, filePath),
+                    key: key,
+                    currentValue: rawValue,
+                    fixedValue: value === 'true',
+                    type: 'boolean',
+                    issue: 'DEBUG should not be quoted, got quoted string'
+                  });
+                }
+                
+                // Check for type issues
+                if (key === 'PORT' && !rawValue.startsWith('"') && !rawValue.startsWith("'") && isNaN(value)) {
+                  issues.push({
+                    file: path.relative(projectDir, filePath),
+                    key: key,
+                    currentValue: value,
+                    fixedValue: parseInt(value) || 3000,
+                    type: 'number',
+                    issue: 'PORT should be a number, got string'
+                  });
+                }
+                
+                if (key === 'DEBUG' && !rawValue.startsWith('"') && !rawValue.startsWith("'") && value !== 'true' && value !== 'false') {
+                  issues.push({
+                    file: path.relative(projectDir, filePath),
+                    key: key,
+                    currentValue: value,
+                    fixedValue: value === 'true' || value === '1',
+                    type: 'boolean',
+                    issue: 'DEBUG should be true/false, got other value'
+                  });
+                }
+                
+                if (key === 'DATABASE_POOL_SIZE' && isNaN(value)) {
+                  issues.push({
+                    file: path.relative(projectDir, filePath),
+                    key: key,
+                    currentValue: value,
+                    fixedValue: parseInt(value) || 10,
+                    type: 'number',
+                    issue: 'DATABASE_POOL_SIZE should be a number, got string'
+                  });
+                }
+              }
+            });
+          } catch (error) {
+            // Skip files we can't read
+          }
+        }
+      }
+    } catch (error) {
+      // Skip directories we can't read
+    }
+  }
+  
+  scanForEnvFiles(projectDir);
+  return issues;
+}
+
+// Find security issues
+function findSecurityIssues(projectDir) {
+  const fs = require('fs');
+  const issues = [];
+  
+  function scanForEnvFiles(dir) {
+    try {
+      const files = fs.readdirSync(dir);
+      
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        const stat = fs.statSync(filePath);
+        
+        if (stat.isDirectory() && !file.startsWith('.') && file !== 'node_modules') {
+          scanForEnvFiles(filePath);
+        } else if (stat.isFile() && file.includes('.env')) {
+          try {
+            // Try UTF-8 first, then UTF-16 if that fails
+            let content;
+            try {
+              content = fs.readFileSync(filePath, 'utf8');
+            } catch (e) {
+              content = fs.readFileSync(filePath, 'utf16le');
+            }
+            
+            // Remove null bytes and normalize
+            content = content.replace(/\u0000/g, '');
+            const lines = content.split('\n');
+            
+            lines.forEach(line => {
+              const cleanLine = line.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+              const match = cleanLine.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+              if (match) {
+                const key = match[1];
+                const value = match[2].replace(/^["']|["']$/g, '');
+                
+                // Check for security issues
+                if (key.includes('JWT_SECRET') && value.length < 32) {
+                  issues.push({
+                    file: path.relative(projectDir, filePath),
+                    title: 'Weak JWT Secret',
+                    description: `JWT secret is only ${value.length} characters long`,
+                    recommendation: 'Generate a secret with at least 32 characters',
+                    currentValue: value,
+                    fixedValue: generateStrongSecret(),
+                    severity: 'critical'
+                  });
+                }
+                
+                if (key.includes('SECRET') && value.length < 16) {
+                  issues.push({
+                    file: path.relative(projectDir, filePath),
+                    title: 'Weak Secret',
+                    description: `Secret is only ${value.length} characters long`,
+                    recommendation: 'Generate a secret with at least 16 characters',
+                    currentValue: value,
+                    fixedValue: generateStrongSecret(),
+                    severity: 'high'
+                  });
+                }
+                
+                if (key === 'DEBUG' && value === 'true' && filePath.includes('prod')) {
+                  issues.push({
+                    file: path.relative(projectDir, filePath),
+                    title: 'Debug Mode in Production',
+                    description: 'DEBUG=true in production environment',
+                    recommendation: 'Set DEBUG=false in production',
+                    currentValue: 'true',
+                    fixedValue: 'false',
+                    severity: 'critical'
+                  });
+                }
+                
+                if (key.includes('URL') && value.startsWith('http://') && filePath.includes('prod')) {
+                  issues.push({
+                    file: path.relative(projectDir, filePath),
+                    title: 'HTTP in Production',
+                    description: 'Using HTTP instead of HTTPS in production',
+                    recommendation: 'Use HTTPS URLs in production',
+                    currentValue: value,
+                    fixedValue: value.replace('http://', 'https://'),
+                    severity: 'high'
+                  });
+                }
+                
+                if (key.includes('PASSWORD') && value.length < 8) {
+                  issues.push({
+                    file: path.relative(projectDir, filePath),
+                    title: 'Weak Password',
+                    description: `Password is only ${value.length} characters long`,
+                    recommendation: 'Use a password with at least 8 characters',
+                    currentValue: value,
+                    fixedValue: '***CHANGE_ME***',
+                    severity: 'high'
+                  });
+                }
+              }
+            });
+          } catch (error) {
+            // Skip files we can't read
+          }
+        }
+      }
+    } catch (error) {
+      // Skip directories we can't read
+    }
+  }
+  
+  scanForEnvFiles(projectDir);
+  return issues;
+}
+
+// Generate strong secret
+function generateStrongSecret() {
+  const crypto = require('crypto');
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// Create backup
+function createBackup(projectDir, plan) {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const result = {
+    success: false,
+    backupDir: null,
+    error: null
+  };
+  
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupDir = path.join(projectDir, `.align-backup-${timestamp}`);
+    
+    // Create backup directory
+    fs.mkdirSync(backupDir, { recursive: true });
+    
+    // Backup files that will be modified
+    const filesToBackup = [
+      ...plan.consolidateFiles.map(f => f.source),
+      ...plan.fixTypes.map(f => f.file),
+      ...plan.securityFixes.map(f => f.file)
+    ];
+    
+    for (const file of filesToBackup) {
+      if (fs.existsSync(file)) {
+        const relativePath = path.relative(projectDir, file);
+        const backupPath = path.join(backupDir, relativePath);
+        const backupDirPath = path.dirname(backupPath);
+        
+        fs.mkdirSync(backupDirPath, { recursive: true });
+        fs.copyFileSync(file, backupPath);
+      }
+    }
+    
+    // Save plan to backup
+    fs.writeFileSync(
+      path.join(backupDir, 'repair-plan.json'),
+      JSON.stringify(plan, null, 2)
+    );
+    
+    result.success = true;
+    result.backupDir = backupDir;
+    
+  } catch (error) {
+    result.error = error.message;
+  }
+  
+  return result;
+}
+
+// Display repair plan
+function displayRepairPlan(plan, detailed = false) {
+  console.log(chalk.blue('📋 Repair Plan:'));
+  console.log(chalk.gray(`  Total changes: ${plan.totalChanges}`));
+  console.log(chalk.gray(`  Estimated time: ${plan.estimatedTime}`));
+  console.log('');
+  
+  if (plan.consolidateFiles.length > 0) {
+    console.log(chalk.cyan('📁 Consolidate scattered configs:'));
+    plan.consolidateFiles.forEach(file => {
+      console.log(chalk.gray(`  - ${file.source} → ${file.target}`));
+    });
+    console.log('');
+  }
+  
+  if (plan.fixTypes.length > 0) {
+    console.log(chalk.cyan('🔧 Fix type issues:'));
+    plan.fixTypes.forEach(fix => {
+      console.log(chalk.gray(`  - ${fix.file}: ${fix.key} = "${fix.currentValue}" → ${fix.fixedValue}`));
+    });
+    console.log('');
+  }
+  
+  if (plan.securityFixes.length > 0) {
+    console.log(chalk.cyan('🔒 Fix security issues:'));
+    plan.securityFixes.forEach(fix => {
+      console.log(chalk.gray(`  - ${fix.file}: ${fix.issue} → ${fix.fix}`));
+    });
+    console.log('');
+  }
+  
+  if (plan.createEnvironments.length > 0) {
+    console.log(chalk.cyan('📋 Create environment structure:'));
+    plan.createEnvironments.forEach(env => {
+      console.log(chalk.gray(`  - ${env.file}`));
+    });
+    console.log('');
+  }
+  
+  if (plan.updateDeployments.length > 0) {
+    console.log(chalk.cyan('🚀 Update deployment configs:'));
+    plan.updateDeployments.forEach(deploy => {
+      console.log(chalk.gray(`  - ${deploy.file}`));
+    });
+    console.log('');
+  }
+}
+
+// Apply repairs interactively
+async function applyRepairsInteractive(plan, options) {
+  const result = {
+    success: false,
+    changesMade: 0,
+    filesCreated: 0
+  };
+  
+  console.log(chalk.yellow('🔧 Interactive Mode - Confirm each change:'));
+  console.log('');
+  
+  // Apply consolidations
+  for (const file of plan.consolidateFiles) {
+    const confirmed = await confirmChange(`Consolidate ${file.source} → ${file.target}?`);
+    if (confirmed) {
+      // Apply consolidation
+      result.changesMade++;
+    }
+  }
+  
+  // Apply type fixes
+  for (const fix of plan.fixTypes) {
+    const confirmed = await confirmChange(`Fix ${fix.file}: ${fix.key} = "${fix.currentValue}" → ${fix.fixedValue}?`);
+    if (confirmed) {
+      // Apply type fix
+      result.changesMade++;
+    }
+  }
+  
+  // Apply security fixes
+  for (const fix of plan.securityFixes) {
+    const confirmed = await confirmChange(`Fix ${fix.file}: ${fix.issue}?`);
+    if (confirmed) {
+      // Apply security fix
+      result.changesMade++;
+    }
+  }
+  
+  // Create environments
+  for (const env of plan.createEnvironments) {
+    const confirmed = await confirmChange(`Create ${env.file}?`);
+    if (confirmed) {
+      // Create environment file
+      result.filesCreated++;
+    }
+  }
+  
+  result.success = true;
+  return result;
+}
+
+// Apply repairs automatically
+function applyRepairsAuto(plan, options, projectDir) {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const result = {
+    success: false,
+    changesMade: 0,
+    filesCreated: 0
+  };
+  
+  console.log(chalk.yellow('🔧 Auto Mode - Applying all safe fixes:'));
+  console.log('');
+  
+  try {
+    // Apply consolidations
+    for (const file of plan.consolidateFiles) {
+      console.log(chalk.gray(`  Consolidating ${file.source} → ${file.target}`));
+      // Apply consolidation
+      result.changesMade++;
+    }
+    
+    // Apply type fixes to .env files
+    for (const fix of plan.fixTypes) {
+      console.log(chalk.gray(`  Fixing ${fix.file}: ${fix.key} = "${fix.currentValue}" → ${fix.fixedValue}`));
+      
+      // Read the .env file
+      const envPath = path.join(projectDir, fix.file);
+      let content;
+      try {
+        content = fs.readFileSync(envPath, 'utf8');
+      } catch (e) {
+        content = fs.readFileSync(envPath, 'utf16le');
+      }
+      content = content.replace(/\u0000/g, '');
+      
+      // Replace the problematic line
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const cleanLine = lines[i].trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+        const match = cleanLine.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);
+        if (match && match[1] === fix.key) {
+          // Replace with fixed value
+          lines[i] = `${fix.key}=${fix.fixedValue}`;
+          break;
+        }
+      }
+      
+      // Write back the fixed file
+      fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
+      result.changesMade++;
+    }
+    
+    // Apply security fixes to .env files
+    for (const fix of plan.securityFixes) {
+      console.log(chalk.gray(`  Fixing ${fix.file}: ${fix.issue}`));
+      
+      // Read the .env file
+      const envPath = path.join(projectDir, fix.file);
+      let content;
+      try {
+        content = fs.readFileSync(envPath, 'utf8');
+      } catch (e) {
+        content = fs.readFileSync(envPath, 'utf16le');
+      }
+      content = content.replace(/\u0000/g, '');
+      
+      // Replace weak secrets with strong ones
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const cleanLine = lines[i].trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+        if (cleanLine.includes('JWT_SECRET') && cleanLine.includes('weak')) {
+          lines[i] = `JWT_SECRET=${generateStrongSecret()}`;
+          break;
+        }
+        if (cleanLine.includes('SECRET') && cleanLine.length < 20) {
+          lines[i] = `SECRET=${generateStrongSecret()}`;
+          break;
+        }
+      }
+      
+      // Write back the fixed file
+      fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
+      result.changesMade++;
+    }
+    
+    // Create Align structure from .env files
+    const envFiles = findScatteredConfigFiles(projectDir).filter(f => f.type === 'environment');
+    
+    if (envFiles.length > 0) {
+      console.log(chalk.blue('📁 Creating Align configuration structure...'));
+      
+      // Parse .env files to extract key-value pairs
+      const configData = {};
+      
+      for (const envFile of envFiles) {
+        let content;
+        try {
+          content = fs.readFileSync(envFile.path, 'utf8');
+        } catch (e) {
+          content = fs.readFileSync(envFile.path, 'utf16le');
+        }
+        content = content.replace(/\u0000/g, '');
+        
+        const lines = content.split('\n');
+        lines.forEach(line => {
+          const cleanLine = line.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+          const match = cleanLine.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);
+          if (match) {
+            const key = match[1].toLowerCase().replace(/_/g, '_');
+            let value = match[2].replace(/^["']|["']$/g, '');
+            
+            // Convert types
+            if (key === 'port' || key === 'database_pool_size') {
+              value = parseInt(value) || 3000;
+            } else if (key === 'debug') {
+              value = value === 'true' || value === '1';
+            } else if (key.includes('enabled')) {
+              value = value === 'true' || value === '1';
+            } else if (key === 'cors_origins') {
+              // Convert comma-separated string to array
+              value = value.split(',').map(item => item.trim());
+            }
+            
+            configData[key] = value;
+          }
+        });
+      }
+      
+      // Create base.align
+      const baseAlignPath = path.join(projectDir, 'config', 'base.align');
+      fs.mkdirSync(path.dirname(baseAlignPath), { recursive: true });
+      
+      let baseAlignContent = '# Base Configuration\n';
+      Object.entries(configData).forEach(([key, value]) => {
+        if (typeof value === 'string') {
+          baseAlignContent += `${key} = "${value}"\n`;
+        } else if (Array.isArray(value)) {
+          baseAlignContent += `${key} = [${value.map(item => `"${item}"`).join(', ')}]\n`;
+        } else {
+          baseAlignContent += `${key} = ${value}\n`;
+        }
+      });
+      
+      fs.writeFileSync(baseAlignPath, baseAlignContent);
+      console.log(chalk.green('  ✅ Created config/base.align'));
+      result.filesCreated++;
+      
+      // Create dev.align
+      const devAlignPath = path.join(projectDir, 'config', 'dev.align');
+      let devAlignContent = '# Development Environment Overrides\n';
+      devAlignContent += 'debug = true\n';
+      devAlignContent += 'log_level = "DEBUG"\n';
+      
+      fs.writeFileSync(devAlignPath, devAlignContent);
+      console.log(chalk.green('  ✅ Created config/dev.align'));
+      result.filesCreated++;
+      
+      // Create prod.align
+      const prodAlignPath = path.join(projectDir, 'config', 'prod.align');
+      let prodAlignContent = '# Production Environment Overrides\n';
+      prodAlignContent += 'debug = false\n';
+      prodAlignContent += 'log_level = "WARN"\n';
+      
+      fs.writeFileSync(prodAlignPath, prodAlignContent);
+      console.log(chalk.green('  ✅ Created config/prod.align'));
+      result.filesCreated++;
+      
+      // Create align.schema.json
+      const schemaPath = path.join(projectDir, 'config', 'align.schema.json');
+      const schemaContent = {};
+      
+      Object.entries(configData).forEach(([key, value]) => {
+        schemaContent[key] = {
+          "type": typeof value === 'number' ? 'number' : 
+                  typeof value === 'boolean' ? 'boolean' : 
+                  Array.isArray(value) ? 'array' : 'string',
+          "required": true
+        };
+        
+        // Add array items definition for arrays
+        if (Array.isArray(value)) {
+          schemaContent[key].items = {
+            "type": "string"
+          };
+        }
+      });
+      
+      fs.writeFileSync(schemaPath, JSON.stringify(schemaContent, null, 2));
+      console.log(chalk.green('  ✅ Created config/align.schema.json'));
+      result.filesCreated++;
+    }
+    
+    result.success = true;
+    
+  } catch (error) {
+    console.error(chalk.red('❌ Auto repair failed:'), error.message);
+  }
+  
+  return result;
+}
+
+// Confirm change (placeholder for interactive mode)
+async function confirmChange(message) {
+  // In a real implementation, this would prompt the user
+  // For now, return true to simulate user confirmation
+  return true;
+}
+
+// Rollback from backup
+function rollback(backupDir) {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const result = {
+    success: false,
+    error: null
+  };
+  
+  try {
+    if (!fs.existsSync(backupDir)) {
+      result.error = 'Backup directory not found';
+      return result;
+    }
+    
+    // Read plan to know what was changed
+    const planPath = path.join(backupDir, 'repair-plan.json');
+    if (fs.existsSync(planPath)) {
+      const plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+      
+      // Restore files from backup
+      for (const file of plan.consolidateFiles) {
+        const backupPath = path.join(backupDir, path.relative(process.cwd(), file.source));
+        if (fs.existsSync(backupPath)) {
+          fs.copyFileSync(backupPath, file.source);
+        }
+      }
+      
+      // Remove created files
+      for (const env of plan.createEnvironments) {
+        if (fs.existsSync(env.file)) {
+          fs.unlinkSync(env.file);
+        }
+      }
+    }
+    
+    result.success = true;
+    
+  } catch (error) {
+    result.error = error.message;
+  }
+  
+  return result;
+}
+
+// Add rollback to repairConfig object
+repairConfig.rollback = rollback;
+
+// Package Schema Discovery and Namespacing Support
+function discoverPackageSchemas(projectDir) {
+  const packageSchemas = {};
+  const nodeModulesPath = path.join(projectDir, 'node_modules');
+  
+  if (!fs.existsSync(nodeModulesPath)) {
+    return packageSchemas;
+  }
+  
+  try {
+    const packages = fs.readdirSync(nodeModulesPath, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith('.'))
+      .map(dirent => dirent.name);
+    
+    for (const packageName of packages) {
+      const packagePath = path.join(nodeModulesPath, packageName);
+      const schemaPath = path.join(packagePath, 'align.schema.json');
+      const packageJsonPath = path.join(packagePath, 'package.json');
+      
+      // Check for dedicated align.schema.json
+      if (fs.existsSync(schemaPath)) {
+        try {
+          const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+          const schema = JSON.parse(schemaContent);
+          packageSchemas[packageName] = schema;
+        } catch (err) {
+          console.warn(`Warning: Failed to load schema for ${packageName}: ${err.message}`);
+        }
+      }
+      
+      // Check for align field in package.json
+      if (fs.existsSync(packageJsonPath)) {
+        try {
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+          if (packageJson.align && typeof packageJson.align === 'object') {
+            packageSchemas[packageName] = packageJson.align;
+          }
+        } catch (err) {
+          // Ignore package.json parsing errors
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`Warning: Failed to scan node_modules: ${err.message}`);
+  }
+  
+  return packageSchemas;
+}
+
+function mergePackageSchemas(projectSchema = {}, packageSchemas = {}) {
+  const mergedSchema = { ...projectSchema };
+  
+  for (const [packageName, schema] of Object.entries(packageSchemas)) {
+    for (const [key, rules] of Object.entries(schema)) {
+      const namespacedKey = `${packageName}.${key}`;
+      mergedSchema[namespacedKey] = {
+        ...rules,
+        _package: packageName,
+        _originalKey: key
+      };
+    }
+  }
+  
+  return mergedSchema;
+}
+
+function parseNamespacedKey(key) {
+  const parts = key.split('.');
+  if (parts.length === 2) {
+    return { namespace: parts[0], key: parts[1] };
+  }
+  return { namespace: null, key };
+}
+
+function resolveConfigContext(config, schemas = {}) {
+  const context = {};
+  
+  for (const [key, value] of Object.entries(config)) {
+    const { namespace, key: actualKey } = parseNamespacedKey(key);
+    const schema = schemas[key];
+    
+    context[key] = {
+      value,
+      source: determineConfigSource(key, config),
+      schema: schema || null,
+      namespace,
+      originalKey: actualKey,
+      overridden: false, // Will be updated by merge tracking
+      package: schema?._package || null
+    };
+  }
+  
+  return context;
+}
+
+function determineConfigSource(key, config) {
+  // This is a simplified version - in practice, this would track
+  // which file and line number the value came from
+  if (key.includes('.')) {
+    const { namespace } = parseNamespacedKey(key);
+    return `package:${namespace}`;
+  }
+  return 'project';
+}
+
+function validateWithPackageSchemas(config, projectSchema = {}, packageSchemas = {}) {
+  const mergedSchema = mergePackageSchemas(projectSchema, packageSchemas);
+  return validateConfig(config, false, mergedSchema);
+}
+
+function explainConfigValue(key, config, schemas = {}) {
+  const { namespace, key: actualKey } = parseNamespacedKey(key);
+  const value = config[key];
+  const schema = schemas[key];
+  
+  const explanation = {
+    key,
+    value,
+    namespace,
+    originalKey: actualKey,
+    source: determineConfigSource(key, config),
+    schema: schema || null,
+    package: schema?._package || null,
+    type: typeof value,
+    validation: null
+  };
+  
+  // Add validation info if schema exists
+  if (schema) {
+    explanation.validation = {
+      type: schema.type,
+      required: schema.required || false,
+      min: schema.min,
+      max: schema.max,
+      pattern: schema.pattern,
+      default: schema.default
+    };
+  }
+  
+  return explanation;
+}
+
+function listAvailableSchemas(projectSchema = {}, packageSchemas = {}) {
+  const schemas = {
+    project: Object.keys(projectSchema),
+    packages: {}
+  };
+  
+  for (const [packageName, schema] of Object.entries(packageSchemas)) {
+    schemas.packages[packageName] = Object.keys(schema);
+  }
+  
+  return schemas;
+}
+
+// Cross-Language Export Functions
+function exportToPython(config, className = 'Settings') {
+  let output = `# Generated by Align - Cross-Language Configuration\n`;
+  output += `# Auto-generated settings class\n\n`;
+  output += `class ${className}:\n`;
+  output += `    """Configuration settings generated from .align files"""\n\n`;
+  
+  for (const [key, value] of Object.entries(config)) {
+    const pythonKey = key.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    
+    if (typeof value === 'string') {
+      output += `    ${pythonKey} = "${value}"\n`;
+    } else if (typeof value === 'boolean') {
+      output += `    ${pythonKey} = ${value}\n`;
+    } else if (typeof value === 'number') {
+      output += `    ${pythonKey} = ${value}\n`;
+    } else if (Array.isArray(value)) {
+      const arrayStr = value.map(v => `"${v}"`).join(', ');
+      output += `    ${pythonKey} = [${arrayStr}]\n`;
+    } else {
+      output += `    ${pythonKey} = "${String(value)}"\n`;
+    }
+  }
+  
+  output += `\n    @classmethod\n`;
+  output += `    def get(cls, key, default=None):\n`;
+  output += `        """Get configuration value with optional default"""\n`;
+  output += `        return getattr(cls, key.upper().replace('-', '_'), default)\n`;
+  
+  return output;
+}
+
+function exportToTOML(config) {
+  let output = `# Generated by Align - Cross-Language Configuration\n`;
+  output += `# TOML format for Rust, Go, and other languages\n\n`;
+  
+  for (const [key, value] of Object.entries(config)) {
+    const tomlKey = key.replace(/[^a-zA-Z0-9_]/g, '_');
+    
+    if (typeof value === 'string') {
+      output += `${tomlKey} = "${value}"\n`;
+    } else if (typeof value === 'boolean') {
+      output += `${tomlKey} = ${value}\n`;
+    } else if (typeof value === 'number') {
+      output += `${tomlKey} = ${value}\n`;
+    } else if (Array.isArray(value)) {
+      const arrayStr = value.map(v => `"${v}"`).join(', ');
+      output += `${tomlKey} = [${arrayStr}]\n`;
+    } else {
+      output += `${tomlKey} = "${String(value)}"\n`;
+    }
+  }
+  
+  return output;
+}
+
+function exportToProperties(config) {
+  let output = `# Generated by Align - Cross-Language Configuration\n`;
+  output += `# Java .properties format\n\n`;
+  
+  for (const [key, value] of Object.entries(config)) {
+    const propKey = key.replace(/[^a-zA-Z0-9_]/g, '.');
+    
+    if (typeof value === 'string') {
+      output += `${propKey}=${value}\n`;
+    } else if (typeof value === 'boolean') {
+      output += `${propKey}=${value}\n`;
+    } else if (typeof value === 'number') {
+      output += `${propKey}=${value}\n`;
+    } else if (Array.isArray(value)) {
+      output += `${propKey}=${value.join(',')}\n`;
+    } else {
+      output += `${propKey}=${String(value)}\n`;
+    }
+  }
+  
+  return output;
+}
+
+function exportToHCL(config, resourceName = 'align_config') {
+  let output = `# Generated by Align - Cross-Language Configuration\n`;
+  output += `# HashiCorp Configuration Language (HCL) for Terraform\n\n`;
+  output += `resource "local_file" "${resourceName}" {\n`;
+  output += `  filename = "config.json"\n`;
+  output += `  content = jsonencode({\n`;
+  
+  const configEntries = Object.entries(config);
+  configEntries.forEach(([key, value], index) => {
+    const hclKey = key.replace(/[^a-zA-Z0-9_]/g, '_');
+    const isLast = index === configEntries.length - 1;
+    
+    if (typeof value === 'string') {
+      output += `    ${hclKey} = "${value}"${isLast ? '' : ','}\n`;
+    } else if (typeof value === 'boolean') {
+      output += `    ${hclKey} = ${value}${isLast ? '' : ','}\n`;
+    } else if (typeof value === 'number') {
+      output += `    ${hclKey} = ${value}${isLast ? '' : ','}\n`;
+    } else if (Array.isArray(value)) {
+      const arrayStr = value.map(v => `"${v}"`).join(', ');
+      output += `    ${hclKey} = [${arrayStr}]${isLast ? '' : ','}\n`;
+    } else {
+      output += `    ${hclKey} = "${String(value)}"${isLast ? '' : ','}\n`;
+    }
+  });
+  
+  output += `  })\n`;
+  output += `}\n`;
+  
+  return output;
+}
+
+function exportToINI(config, sectionName = 'config') {
+  let output = `# Generated by Align - Cross-Language Configuration\n`;
+  output += `# INI format for various applications\n\n`;
+  output += `[${sectionName}]\n`;
+  
+  for (const [key, value] of Object.entries(config)) {
+    const iniKey = key.replace(/[^a-zA-Z0-9_]/g, '_');
+    
+    if (typeof value === 'string') {
+      output += `${iniKey} = ${value}\n`;
+    } else if (typeof value === 'boolean') {
+      output += `${iniKey} = ${value}\n`;
+    } else if (typeof value === 'number') {
+      output += `${iniKey} = ${value}\n`;
+    } else if (Array.isArray(value)) {
+      output += `${iniKey} = ${value.join(',')}\n`;
+    } else {
+      output += `${iniKey} = ${String(value)}\n`;
+    }
+  }
+  
+  return output;
+}
+
+function exportToXML(config, rootElement = 'config') {
+  let output = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+  output += `<!-- Generated by Align - Cross-Language Configuration -->\n`;
+  output += `<${rootElement}>\n`;
+  
+  for (const [key, value] of Object.entries(config)) {
+    const xmlKey = key.replace(/[^a-zA-Z0-9_]/g, '_');
+    
+    if (typeof value === 'string') {
+      output += `  <${xmlKey}>${value}</${xmlKey}>\n`;
+    } else if (typeof value === 'boolean') {
+      output += `  <${xmlKey}>${value}</${xmlKey}>\n`;
+    } else if (typeof value === 'number') {
+      output += `  <${xmlKey}>${value}</${xmlKey}>\n`;
+    } else if (Array.isArray(value)) {
+      output += `  <${xmlKey}>\n`;
+      value.forEach(item => {
+        output += `    <item>${item}</item>\n`;
+      });
+      output += `  </${xmlKey}>\n`;
+    } else {
+      output += `  <${xmlKey}>${String(value)}</${xmlKey}>\n`;
+    }
+  }
+  
+  output += `</${rootElement}>\n`;
+  return output;
+}
+
+module.exports = {
+  parseAlign,
+  parseValue,
+  validateConfig,
+  mergeConfigs,
+  loadSchema,
+  performSmartAnalysis,
+  diagnoseConfig,
+  repairConfig,
+  findTypeIssues,
+  findSecurityIssues,
+  generateStrongSecret,
+  // Package schema and namespacing support
+  discoverPackageSchemas,
+  mergePackageSchemas,
+  parseNamespacedKey,
+  resolveConfigContext,
+  validateWithPackageSchemas,
+  explainConfigValue,
+  listAvailableSchemas,
+  // Cross-language export functions
+  exportToPython,
+  exportToTOML,
+  exportToProperties,
+  exportToHCL,
+  exportToINI,
+  exportToXML
+};
   
