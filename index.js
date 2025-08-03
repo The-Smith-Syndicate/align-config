@@ -68,7 +68,7 @@ const yaml = require('js-yaml');
 const inquirer = require('inquirer');
 
 const program = new Command();
-program.name('align').description('Align config CLI').version('1.0.2');
+program.name('align').description('Align config CLI').version('1.0.3');
 
 // INIT COMMAND
 program
