@@ -34,7 +34,28 @@ const {
   extractModuleConfig,
   validateModuleConfig,
   discoverModuleSchemas,
-  generateModuleConfig
+  generateModuleConfig,
+  // New feature imports
+  lintConfig,
+  applyLintFixes,
+  writeFixedConfig,
+  detectSensitiveFields,
+  validateSecrets,
+  explainWithSecrets,
+  validateSecretsWithExternal,
+  generateCIConfig,
+  addVersionToSchema,
+  getSchemaVersion,
+  getConfigVersion,
+  compareVersions,
+  detectVersionIssues,
+  generateVersionMigrationPlan,
+  applyMigration,
+  bumpSchemaVersion,
+  bumpConfigVersion,
+  validateMigrationCompatibility,
+  exportToJSONWithComments,
+  exportToYAMLWithComments
 } = require('../parser.js');
 
 describe('Parser Module', () => {
@@ -1850,5 +1871,675 @@ describe('Module-Specific Configuration', () => {
     expect(result.errors).toContain('Missing required field for module: rate_limit');
     expect(result.errors).toContain('Missing required field for module: jwt_secret');
     expect(result.missing).toContain('session_timeout');
+  });
+}); 
+
+// ============================================================================
+// NEW FEATURE TESTS
+// ============================================================================
+
+describe('Inline Comments & Descriptions', () => {
+  test('should export JSON with comments', () => {
+    const config = {
+      timeout: 3000,
+      retries: 3,
+      debug: true
+    };
+    
+    const schema = {
+      properties: {
+        timeout: {
+          type: 'number',
+          description: 'Timeout in ms for network calls'
+        },
+        retries: {
+          type: 'number',
+          description: 'Number of retry attempts'
+        },
+        debug: {
+          type: 'boolean',
+          description: 'Enable debug mode'
+        }
+      }
+    };
+    
+    const result = exportToJSONWithComments(config, schema);
+    
+    expect(result).toContain('"timeout": 3000');
+    expect(result).toContain('"retries": 3');
+    expect(result).toContain('"debug": true');
+    expect(result).toContain('// Timeout in ms for network calls');
+    expect(result).toContain('// Number of retry attempts');
+    expect(result).toContain('// Enable debug mode');
+  });
+
+  test('should export YAML with comments', () => {
+    const config = {
+      database: {
+        url: 'postgresql://localhost:5432/myapp',
+        pool_size: 10
+      }
+    };
+    
+    const schema = {
+      properties: {
+        database: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              description: 'Database connection URL'
+            },
+            pool_size: {
+              type: 'number',
+              description: 'Connection pool size'
+            }
+          }
+        }
+      }
+    };
+    
+    const result = exportToYAMLWithComments(config, schema);
+    
+    expect(result).toContain('database:');
+    expect(result).toContain('url: postgresql://localhost:5432/myapp');
+    expect(result).toContain('pool_size: 10');
+    expect(result).toContain('# Database connection URL');
+    expect(result).toContain('# Connection pool size');
+  });
+
+  test('should handle missing descriptions gracefully', () => {
+    const config = {
+      port: 3000,
+      host: 'localhost'
+    };
+    
+    const schema = {
+      properties: {
+        port: { type: 'number' },
+        host: { type: 'string' }
+      }
+    };
+    
+    const result = exportToJSONWithComments(config, schema);
+    
+    expect(result).toContain('"port": 3000');
+    expect(result).toContain('"host": "localhost"');
+    // Should not crash when descriptions are missing
+  });
+});
+
+describe('Config Linting', () => {
+  const mockSchema = {
+    properties: {
+      port: {
+        type: 'number',
+        default: 3000,
+        pattern: '^[0-9]+$'
+      },
+      api_key: {
+        type: 'string',
+        sensitive: true,
+        minLength: 16
+      },
+      timeout: {
+        type: 'number',
+        default: 5000,
+        minimum: 1000,
+        maximum: 30000
+      },
+      debug: {
+        type: 'boolean',
+        default: false
+      }
+    }
+  };
+
+  test('should detect unused fields', () => {
+    const config = {
+      port: 3000,
+      unused_field: 'value',
+      another_unused: 123
+    };
+    
+    const result = lintConfig(config, mockSchema);
+    
+    expect(result.issues).toBeDefined();
+    const unusedFieldIssues = result.issues.filter(issue => issue.type === 'unused_fields');
+    expect(unusedFieldIssues.length).toBeGreaterThan(0);
+    const unusedFields = unusedFieldIssues[0].details;
+    expect(unusedFields.some(field => field.field === 'unused_field')).toBe(true);
+    expect(unusedFields.some(field => field.field === 'another_unused')).toBe(true);
+  });
+
+  test('should detect overly permissive patterns', () => {
+    const permissiveSchema = {
+      properties: {
+        password: {
+          type: 'string',
+          pattern: '.*' // Too permissive
+        },
+        email: {
+          type: 'string',
+          pattern: '[a-z]+' // Too permissive
+        }
+      }
+    };
+    
+    const result = lintConfig({}, permissiveSchema);
+    
+    expect(result.warnings).toBeDefined();
+    const permissivePatternWarnings = result.warnings.filter(warning => warning.type === 'permissive_patterns');
+    expect(permissivePatternWarnings.length).toBeGreaterThan(0);
+  });
+
+  test('should detect conflicting defaults', () => {
+    const config = {
+      port: 3000 // Same as schema default
+    };
+    
+    const result = lintConfig(config, mockSchema);
+    
+    expect(result.issues).toBeDefined();
+    const conflictingDefaultIssues = result.issues.filter(issue => issue.type === 'conflicting_defaults');
+    expect(conflictingDefaultIssues.length).toBeGreaterThan(0);
+  });
+
+  test('should suggest best practices', () => {
+    const weakConfig = {
+      api_key: 'weak',
+      timeout: 100 // Too low
+    };
+    
+    const result = lintConfig(weakConfig, mockSchema);
+    
+    expect(result.suggestions).toBeDefined();
+    expect(result.suggestions.length).toBeGreaterThan(0);
+  });
+
+  test('should apply lint fixes', () => {
+    const config = {
+      port: 3000, // Redundant with schema default
+      unused_field: 'remove_me'
+    };
+    
+    const lintResult = lintConfig(config, mockSchema);
+    const result = applyLintFixes(config, mockSchema, 'dev', lintResult);
+    const fixedConfig = result.config;
+    
+    expect(fixedConfig).not.toHaveProperty('unused_field');
+    expect(fixedConfig).toHaveProperty('debug'); // Should add missing default
+  });
+
+  test('should write fixed config to files', () => {
+    const config = {
+      port: 3000,
+      unused_field: 'remove_me',
+      debug: true // This will be added to base config
+    };
+    
+    // Mock fs functions
+    const originalWriteFileSync = fs.writeFileSync;
+    const originalExistsSync = fs.existsSync;
+    const originalMkdirSync = fs.mkdirSync;
+    const originalReadFileSync = fs.readFileSync;
+    
+    fs.writeFileSync = jest.fn();
+    fs.existsSync = jest.fn().mockReturnValue(true); // Files exist
+    fs.mkdirSync = jest.fn();
+    fs.readFileSync = jest.fn().mockReturnValue('port = 3000\n');
+    
+    // Mock fs.promises for async operations
+    const originalFsPromises = fs.promises;
+    const mockWriteFile = jest.fn().mockResolvedValue(undefined);
+    const mockReadFile = jest.fn().mockResolvedValue('port = 3000\n');
+    
+    fs.promises = {
+      readFile: mockReadFile,
+      writeFile: mockWriteFile
+    };
+    
+    // The function should not throw an error
+    expect(() => {
+      writeFixedConfig(config, './config', 'dev', mockSchema);
+    }).not.toThrow();
+    
+    // Restore original functions
+    fs.writeFileSync = originalWriteFileSync;
+    fs.existsSync = originalExistsSync;
+    fs.mkdirSync = originalMkdirSync;
+    fs.readFileSync = originalReadFileSync;
+    fs.promises = originalFsPromises;
+  });
+});
+
+describe('Secrets Management', () => {
+  const mockSchema = {
+    properties: {
+      api_key: {
+        type: 'string',
+        sensitive: true,
+        minLength: 16
+      },
+      jwt_secret: {
+        type: 'string',
+        sensitive: true,
+        minLength: 32
+      },
+      database_password: {
+        type: 'string',
+        sensitive: true
+      },
+      public_config: {
+        type: 'string'
+      }
+    }
+  };
+
+  test('should detect sensitive fields', () => {
+    const config = {
+      api_key: 'secret_key_123',
+      jwt_secret: 'super_secret_jwt_key',
+      database_password: 'db_pass',
+      public_config: 'not_secret'
+    };
+    
+    const sensitiveFields = detectSensitiveFields(config, mockSchema);
+    
+    expect(sensitiveFields).toBeInstanceOf(Array);
+    expect(sensitiveFields.some(field => field.field === 'api_key')).toBe(true);
+    expect(sensitiveFields.some(field => field.field === 'jwt_secret')).toBe(true);
+    expect(sensitiveFields.some(field => field.field === 'database_password')).toBe(true);
+    expect(sensitiveFields.some(field => field.field === 'public_config')).toBe(false);
+  });
+
+  test('should validate secrets', () => {
+    const config = {
+      api_key: 'weak_key',
+      jwt_secret: 'strong_jwt_secret_32_chars_long',
+      database_password: 'db_pass'
+    };
+    
+    const result = validateSecrets(config, mockSchema);
+    
+    expect(result).toBeDefined();
+    expect(result.weakSecrets).toBeDefined();
+    expect(result.validSecrets).toBeDefined();
+    expect(result.weakSecrets.some(secret => secret.field === 'api_key')).toBe(true);
+    expect(result.weakSecrets.some(secret => secret.field === 'database_password')).toBe(true);
+    expect(result.validSecrets.some(secret => secret.field === 'jwt_secret')).toBe(true);
+  });
+
+  test('should explain secrets with masking', () => {
+    const config = {
+      api_key: 'secret_key_123',
+      jwt_secret: 'super_secret_jwt_key',
+      public_config: 'not_secret'
+    };
+    
+    const explanation = explainWithSecrets(config, 'api_key', 'dev', { mask: true });
+    
+    expect(explanation).toBeDefined();
+    expect(explanation.value).toContain('***');
+  });
+
+  test('should validate secrets with external integration', () => {
+    const config = {
+      api_key: 'secret_key_123',
+      jwt_secret: 'super_secret_jwt_key'
+    };
+    
+    // Mock external secrets file
+    const originalExistsSync = fs.existsSync;
+    const originalReadFileSync = fs.readFileSync;
+    
+    fs.existsSync = jest.fn().mockReturnValue(true);
+    fs.readFileSync = jest.fn().mockReturnValue('JWT_SECRET=external_secret\nAPI_KEY=external_key');
+    
+    const result = validateSecretsWithExternal(config, mockSchema, 'dev', { envSecrets: true, vault: true });
+    
+    expect(result).toBeDefined();
+    expect(result.externalSecrets).toBeDefined();
+    expect(result.integrationStatus).toBeDefined();
+    
+    // Restore original functions
+    fs.existsSync = originalExistsSync;
+    fs.readFileSync = originalReadFileSync;
+  });
+});
+
+describe('CI/CD Helper', () => {
+  const mockConfig = {
+    app_name: 'myapp',
+    port: 3000,
+    database_url: 'postgresql://localhost:5432/myapp'
+  };
+
+  test('should generate GitHub Actions workflow', () => {
+    const result = generateCIConfig('github', mockConfig, {
+      workflowName: 'align-config',
+      securityScanning: true,
+      cacheDependencies: true,
+      matrixStrategy: true,
+      deploymentStrategy: 'manual'
+    });
+    
+    expect(result).toBeDefined();
+    expect(typeof result).toBe('object');
+    expect(result.name).toBe('align-config');
+    expect(result.jobs).toBeDefined();
+  });
+
+  test('should generate GitLab CI configuration', () => {
+    const result = generateCIConfig('gitlab', mockConfig, {
+      parallelBuilds: true,
+      securityScanning: true
+    });
+    
+    expect(result).toBeDefined();
+    expect(typeof result).toBe('object');
+    expect(result.stages).toBeDefined();
+  });
+
+  test('should generate Jenkins pipeline', () => {
+    const result = generateCIConfig('jenkins', mockConfig, {
+      parallelBuilds: true,
+      deploymentStrategy: 'auto'
+    });
+    
+    expect(result).toBeDefined();
+    expect(typeof result).toBe('object');
+    expect(result.agent).toBeDefined();
+    expect(result.stages).toBeDefined();
+  });
+
+  test('should generate CircleCI configuration', () => {
+    const result = generateCIConfig('circleci', mockConfig, {
+      cacheDependencies: true,
+      matrixStrategy: true
+    });
+    
+    expect(result).toBeDefined();
+    expect(typeof result).toBe('object');
+    expect(result.version).toBe('2.1');
+    expect(result.jobs).toBeDefined();
+  });
+
+  test('should generate Azure DevOps pipeline', () => {
+    const result = generateCIConfig('azure', mockConfig, {
+      deploymentStrategy: 'manual',
+      securityScanning: true
+    });
+    
+    expect(result).toBeDefined();
+    expect(typeof result).toBe('object');
+    expect(result.trigger).toBeDefined();
+    expect(result.stages).toBeDefined();
+  });
+
+  test('should handle unsupported platform gracefully', () => {
+    expect(() => {
+      generateCIConfig('unsupported', mockConfig, {});
+    }).toThrow('Unsupported CI/CD platform: unsupported');
+  });
+});
+
+describe('Versioning Support', () => {
+  const mockSchema = {
+    version: '1.0.0',
+    properties: {
+      port: { type: 'number', default: 3000 },
+      api_key: { type: 'string', sensitive: true }
+    }
+  };
+
+  const mockConfig = {
+    version: '1.0.0',
+    port: 3000,
+    api_key: 'secret_key'
+  };
+
+  test('should add version to schema', () => {
+    const schemaWithoutVersion = {
+      properties: {
+        port: { type: 'number' }
+      }
+    };
+    
+    const result = addVersionToSchema(schemaWithoutVersion, '2.0.0');
+    
+    expect(result.version).toBe('2.0.0');
+    expect(result.properties).toEqual(schemaWithoutVersion.properties);
+  });
+
+  test('should get schema version', () => {
+    const version = getSchemaVersion(mockSchema);
+    expect(version).toBe('1.0.0');
+  });
+
+  test('should get config version', () => {
+    const version = getConfigVersion(mockConfig);
+    expect(version).toBe('1.0.0');
+  });
+
+  test('should compare versions correctly', () => {
+    expect(compareVersions('1.0.0', '1.0.0')).toBe(0);
+    expect(compareVersions('1.0.0', '1.0.1')).toBe(-1);
+    expect(compareVersions('2.0.0', '1.9.9')).toBe(1);
+  });
+
+  test('should detect version issues', () => {
+    const oldConfig = { version: '0.9.0', port: 3000 };
+    const issues = detectVersionIssues(mockSchema, oldConfig);
+    
+    expect(issues).toBeDefined();
+    expect(issues.outdated).toBeDefined();
+    expect(issues.currentVersion).toBeDefined();
+    expect(issues.latestVersion).toBeDefined();
+  });
+
+  test('should generate migration plan', () => {
+    const oldConfig = { version: '0.9.0', port: 3000 };
+    const plan = generateVersionMigrationPlan('0.9.0', '1.0.0', mockSchema, oldConfig);
+    
+    expect(plan).toBeDefined();
+    expect(plan.fromVersion).toBe('0.9.0');
+    expect(plan.toVersion).toBe('1.0.0');
+    expect(plan.changes).toBeDefined();
+    expect(plan.estimatedTime).toBeDefined();
+  });
+
+  test('should apply migration', () => {
+    const oldConfig = { version: '0.9.0', port: 3000 };
+    const migrationPlan = {
+      fromVersion: '0.9.0',
+      toVersion: '1.0.0',
+      steps: [
+        { type: 'update_version', field: 'version', value: '1.0.0' }
+      ]
+    };
+    
+    const result = applyMigration(oldConfig, migrationPlan);
+    
+    expect(result).toBeDefined();
+    expect(result.success).toBe(true);
+    expect(result.config.version).toBe('1.0.0');
+  });
+
+  test('should bump schema version', () => {
+    const result = bumpSchemaVersion(mockSchema, 'minor');
+    
+    expect(result).toBeDefined();
+    expect(result.version).toBe('1.1.0');
+    expect(result.changes).toBeDefined();
+  });
+
+  test('should bump config version', () => {
+    const result = bumpConfigVersion(mockConfig, 'patch');
+    
+    expect(result).toBeDefined();
+    expect(result.version).toBe('1.0.1');
+    expect(result.changes).toBeDefined();
+  });
+
+  test('should validate migration compatibility', () => {
+    const oldSchema = { version: '0.9.0', properties: {} };
+    const oldConfig = { version: '0.9.0' };
+    const result = validateMigrationCompatibility(oldSchema, oldConfig, '1.0.0');
+    
+    expect(result).toBeDefined();
+    expect(result.compatible).toBeDefined();
+    expect(result.breakingChanges).toBeDefined();
+    expect(result.recommendations).toBeDefined();
+  });
+});
+
+describe('Integration Tests - Features Working Together', () => {
+  test('should lint config with secrets and apply fixes', () => {
+    const config = {
+      port: 3000,
+      api_key: 'weak_key',
+      unused_field: 'remove_me'
+    };
+    
+    const schema = {
+      version: '1.0.0',
+      properties: {
+        port: { type: 'number', default: 3000 },
+        api_key: { type: 'string', sensitive: true, minLength: 16 }
+      }
+    };
+    
+    // Lint the config
+    const lintResult = lintConfig(config, schema);
+    expect(lintResult.issues).toBeDefined();
+    
+    // Apply fixes
+    const fixedConfig = applyLintFixes(config, schema, 'dev', lintResult);
+    expect(fixedConfig).not.toHaveProperty('unused_field');
+  });
+
+  test('should generate CI config with versioning and secrets', () => {
+    const config = {
+      version: '1.0.0',
+      app_name: 'myapp',
+      api_key: 'secret_key',
+      port: 3000
+    };
+    
+    const schema = {
+      version: '1.0.0',
+      properties: {
+        api_key: { type: 'string', sensitive: true },
+        port: { type: 'number' }
+      }
+    };
+    
+    // Check version compatibility
+    const versionIssues = detectVersionIssues(schema, config);
+    expect(versionIssues).toBeDefined();
+    
+    // Generate CI config
+    const ciConfig = generateCIConfig('github', config, {
+      securityScanning: true
+    });
+    
+    expect(ciConfig).toBeDefined();
+    expect(ciConfig.jobs).toBeDefined();
+  });
+
+  test('should export with comments and validate secrets', () => {
+    const config = {
+      api_key: 'secret_key_123',
+      port: 3000
+    };
+    
+    const schema = {
+      properties: {
+        api_key: {
+          type: 'string',
+          sensitive: true,
+          description: 'API key for external service'
+        },
+        port: {
+          type: 'number',
+          description: 'Server port'
+        }
+      }
+    };
+    
+    // Export with comments
+    const jsonWithComments = exportToJSONWithComments(config, schema);
+    expect(jsonWithComments).toContain('// API key for external service');
+    expect(jsonWithComments).toContain('// Server port');
+    
+    // Validate secrets
+    const secretsValidation = validateSecrets(config, schema);
+    expect(secretsValidation).toBeDefined();
+    expect(secretsValidation.weakSecrets).toBeDefined();
+  });
+});
+
+describe('Edge Cases and Error Conditions', () => {
+  const mockSchema = {
+    properties: {
+      port: { type: 'number', default: 3000 }
+    }
+  };
+
+  test('should handle empty config in linting', () => {
+    const result = lintConfig({}, mockSchema);
+    
+    expect(result).toBeDefined();
+    expect(result.issues).toBeDefined();
+    expect(result.warnings).toBeDefined();
+    expect(result.suggestions).toBeDefined();
+  });
+
+  test('should handle missing schema in secrets validation', () => {
+    const config = { api_key: 'secret' };
+    const result = validateSecrets(config, {});
+    
+    expect(result).toBeDefined();
+    expect(result.weakSecrets).toBeDefined();
+    expect(result.validSecrets).toBeDefined();
+  });
+
+  test('should handle invalid version format', () => {
+    const invalidConfig = { version: 'invalid' };
+    const version = getConfigVersion(invalidConfig);
+    
+    expect(version).toBe('0.0.0'); // Default fallback
+  });
+
+  test('should handle CI generation with empty config', () => {
+    const result = generateCIConfig('github', {}, {});
+    
+    expect(result).toBeDefined();
+    expect(typeof result).toBe('object');
+    expect(result.jobs).toBeDefined();
+  });
+
+  test('should handle export with empty schema', () => {
+    const config = { port: 3000 };
+    const result = exportToJSONWithComments(config, {});
+    
+    expect(result).toContain('"port": 3000');
+    // Should not crash when schema is empty
+  });
+
+  test('should handle migration with incompatible versions', () => {
+    const oldConfig = { version: '0.1.0' };
+    const newSchema = { version: '2.0.0', properties: {} };
+    const migrationPlan = {
+      fromVersion: '0.1.0',
+      toVersion: '2.0.0',
+      steps: []
+    };
+    
+    const result = applyMigration(oldConfig, migrationPlan);
+    
+    expect(result).toBeDefined();
+    expect(result.success).toBeDefined();
   });
 }); 

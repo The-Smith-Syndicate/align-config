@@ -17,6 +17,15 @@ const {
   exportToHCL,
   exportToINI,
   exportToXML,
+  // Enhanced export functions with comments
+  exportToJSONWithComments,
+  exportToYAMLWithComments,
+  exportToPythonWithComments,
+  exportToTOMLWithComments,
+  exportToPropertiesWithComments,
+  exportToHCLWithComments,
+  exportToINIWithComments,
+  exportToXMLWithComments,
   validatePolicies,
   loadPolicies,
   suggestPolicies,
@@ -27,7 +36,29 @@ const {
   extractModuleConfig,
   discoverModuleSchemas,
   generateModuleConfig,
-  validateModuleConfig
+  validateModuleConfig,
+  // Linting functions
+  lintConfig,
+  applyLintFixes,
+  writeFixedConfig,
+  // Secrets management functions
+  detectSensitiveFields,
+  validateSecrets,
+  explainWithSecrets,
+  validateSecretsWithExternal,
+  // CI/CD helper functions
+  generateCIConfig,
+  // Versioning support functions
+  addVersionToSchema,
+  getSchemaVersion,
+  getConfigVersion,
+  compareVersions,
+  detectVersionIssues,
+  generateVersionMigrationPlan,
+  applyMigration,
+  bumpSchemaVersion,
+  bumpConfigVersion,
+  validateMigrationCompatibility
 } = require('./parser');
 const { Command } = require('commander');
 const chalk = require('chalk');
@@ -199,6 +230,7 @@ program
   .option('--format <format>', 'Output format (json, yaml, env, python, toml, properties, hcl, ini, xml)', 'json')
   .option('--schema <file>', 'Schema file path (align.schema.json)')
   .option('--k8s-configmap', 'Generate Kubernetes ConfigMap YAML')
+  .option('--comments', 'Include field descriptions as comments in output (requires schema)')
   .action((options) => {
     try {
       const configDir = path.resolve(options.configDir);
@@ -294,8 +326,18 @@ program
       let output;
       let fileExtension;
       
+      // Check if comments are requested and schema is available
+      const useComments = options.comments && schema;
+      if (options.comments && !schema) {
+        console.log(chalk.yellow('⚠️  --comments flag requires a schema file. Comments will not be included.'));
+      }
+      
       if (options.format === 'yaml') {
-        output = yaml.dump(mergedConfig, { indent: 2 });
+        if (useComments) {
+          output = exportToYAMLWithComments(mergedConfig, schema);
+        } else {
+          output = yaml.dump(mergedConfig, { indent: 2 });
+        }
         fileExtension = '.yaml';
       } else if (options.format === 'env') {
         // Convert to .env format
@@ -304,41 +346,78 @@ program
             // Convert key to UPPER_CASE format
             const envKey = key.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
             
-            // Handle different value types
-            if (typeof value === 'string') {
-              return `${envKey}="${value}"`;
-            } else if (typeof value === 'boolean') {
-              return `${envKey}=${value}`;
-            } else if (typeof value === 'number') {
-              return `${envKey}=${value}`;
-            } else if (Array.isArray(value)) {
-              return `${envKey}="${value.join(',')}"`;
-            } else {
-              return `${envKey}="${String(value)}"`;
+            // Add comment if description exists and comments are enabled
+            let comment = '';
+            if (useComments && schema.properties && schema.properties[key] && schema.properties[key].description) {
+              comment = ` # ${schema.properties[key].description}`;
             }
+            
+            // Handle different value types
+            let envValue;
+            if (typeof value === 'string') {
+              envValue = `"${value}"`;
+            } else if (typeof value === 'boolean') {
+              envValue = value;
+            } else if (typeof value === 'number') {
+              envValue = value;
+            } else if (Array.isArray(value)) {
+              envValue = `"${value.join(',')}"`;
+            } else {
+              envValue = `"${String(value)}"`;
+            }
+            
+            return `${envKey}=${envValue}${comment}`;
           })
           .join('\n');
         fileExtension = '.env';
       } else if (options.format === 'python') {
-        output = exportToPython(mergedConfig);
+        if (useComments) {
+          output = exportToPythonWithComments(mergedConfig, schema);
+        } else {
+          output = exportToPython(mergedConfig);
+        }
         fileExtension = '.py';
       } else if (options.format === 'toml') {
-        output = exportToTOML(mergedConfig);
+        if (useComments) {
+          output = exportToTOMLWithComments(mergedConfig, schema);
+        } else {
+          output = exportToTOML(mergedConfig);
+        }
         fileExtension = '.toml';
       } else if (options.format === 'properties') {
-        output = exportToProperties(mergedConfig);
+        if (useComments) {
+          output = exportToPropertiesWithComments(mergedConfig, schema);
+        } else {
+          output = exportToProperties(mergedConfig);
+        }
         fileExtension = '.properties';
       } else if (options.format === 'hcl') {
-        output = exportToHCL(mergedConfig);
+        if (useComments) {
+          output = exportToHCLWithComments(mergedConfig, schema);
+        } else {
+          output = exportToHCL(mergedConfig);
+        }
         fileExtension = '.tf';
       } else if (options.format === 'ini') {
-        output = exportToINI(mergedConfig);
+        if (useComments) {
+          output = exportToINIWithComments(mergedConfig, schema);
+        } else {
+          output = exportToINI(mergedConfig);
+        }
         fileExtension = '.ini';
       } else if (options.format === 'xml') {
-        output = exportToXML(mergedConfig);
+        if (useComments) {
+          output = exportToXMLWithComments(mergedConfig, schema);
+        } else {
+          output = exportToXML(mergedConfig);
+        }
         fileExtension = '.xml';
       } else {
-        output = JSON.stringify(mergedConfig, null, 2);
+        if (useComments) {
+          output = exportToJSONWithComments(mergedConfig, schema);
+        } else {
+          output = JSON.stringify(mergedConfig, null, 2);
+        }
         fileExtension = '.json';
       }
 
@@ -351,6 +430,9 @@ program
       console.log(chalk.gray(`📄 Output: ${finalOutPath}`));
       console.log(chalk.gray(`📊 Keys: ${Object.keys(mergedConfig).length}`));
       console.log(chalk.gray(`📋 Format: ${options.format.toUpperCase()}`));
+      if (useComments) {
+        console.log(chalk.blue(`💬 Comments: Included from schema descriptions`));
+      }
       
       // Show what was overridden
       const overriddenKeys = Object.keys(envConfig);
@@ -742,6 +824,587 @@ program
     }
   });
 
+// LINT COMMAND
+program
+  .command('lint')
+  .description('Lint configuration for best practices, unused fields, and potential issues')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--env <environment>', 'Environment to lint (dev, prod, staging)', 'dev')
+  .option('--schema <file>', 'Schema file path (align.schema.json)')
+  .option('--format <format>', 'Output format (text, json)', 'text')
+  .option('--strict', 'Treat warnings as errors')
+  .option('--fix', 'Automatically fix fixable issues')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const env = options.env;
+      
+      console.log(chalk.blue(`🔍 Linting Configuration: ${env} environment`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}\n`));
+
+      // Load schema if provided
+      let schema = null;
+      if (options.schema) {
+        const schemaPath = path.resolve(options.schema);
+        schema = loadSchema(schemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${schemaPath}`));
+        }
+      } else {
+        // Try to find align.schema.json in config directory
+        const defaultSchemaPath = path.join(configDir, 'align.schema.json');
+        schema = loadSchema(defaultSchemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${defaultSchemaPath}`));
+        }
+      }
+
+      // Load and merge configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
+      const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      // Perform linting
+      const lintResult = lintConfig(mergedConfig, schema, env);
+
+      // Apply fixes if requested
+      let fixedConfig = mergedConfig;
+      let fixResults = { fixed: [], notFixed: [] };
+      
+      if (options.fix) {
+        console.log(chalk.blue('🔧 Applying automatic fixes...'));
+        const fixResult = applyLintFixes(mergedConfig, schema, env, lintResult);
+        fixedConfig = fixResult.config;
+        fixResults = fixResult.results;
+        
+        if (fixResults.fixed.length > 0) {
+          console.log(chalk.green(`✅ Fixed ${fixResults.fixed.length} issues:`));
+          fixResults.fixed.forEach(fix => {
+            console.log(chalk.gray(`  - ${fix.field}: ${fix.oldValue} → ${fix.newValue}`));
+          });
+          console.log('');
+        }
+        
+        if (fixResults.notFixed.length > 0) {
+          console.log(chalk.yellow(`⚠️  ${fixResults.notFixed.length} issues require manual fixes:`));
+          fixResults.notFixed.forEach(issue => {
+            console.log(chalk.gray(`  - ${issue.field}: ${issue.reason}`));
+          });
+          console.log('');
+        }
+        
+        // Write fixed config back to files
+        if (fixResults.fixed.length > 0) {
+          await writeFixedConfig(fixedConfig, configDir, env, schema);
+          console.log(chalk.green('💾 Fixed configuration saved to files.'));
+          console.log('');
+        }
+      }
+
+      // Output results
+      if (options.format === 'json') {
+        console.log(JSON.stringify(lintResult, null, 2));
+      } else {
+        displayLintResults(lintResult, options.strict);
+      }
+
+      // Exit with appropriate code
+      const hasErrors = lintResult.issues.some(issue => issue.severity === 'error');
+      const hasWarnings = lintResult.warnings.length > 0;
+      
+      if (options.strict && (hasErrors || hasWarnings)) {
+        process.exit(1);
+      } else if (hasErrors) {
+        process.exit(1);
+      } else {
+        process.exit(0);
+      }
+
+    } catch (err) {
+      console.error(chalk.red('❌ Lint error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// SECRETS MANAGEMENT COMMANDS
+program
+  .command('secrets')
+  .description('Manage and validate sensitive configuration fields')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--env <environment>', 'Environment to analyze (dev, prod, staging)', 'dev')
+  .option('--schema <file>', 'Schema file path (align.schema.json)')
+  .option('--format <format>', 'Output format (text, json)', 'text')
+  .option('--mask', 'Mask sensitive values in output')
+  .option('--env-secrets', 'Check integration with .env.secret file')
+  .option('--vault', 'Check Vault integration')
+  .option('--vault-address <address>', 'Vault server address', 'http://localhost:8200')
+  .option('--vault-token <token>', 'Vault authentication token')
+  .option('--vault-path <path>', 'Vault secrets path', 'secret')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const env = options.env;
+      
+      console.log(chalk.blue(`🔐 Secrets Management: ${env} environment`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}\n`));
+
+      // Load schema if provided
+      let schema = null;
+      if (options.schema) {
+        const schemaPath = path.resolve(options.schema);
+        schema = loadSchema(schemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${schemaPath}`));
+        }
+      } else {
+        // Try to find align.schema.json in config directory
+        const defaultSchemaPath = path.join(configDir, 'align.schema.json');
+        schema = loadSchema(defaultSchemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${defaultSchemaPath}`));
+        }
+      }
+
+      // Load and merge configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
+      const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      // Validate secrets with external integrations
+      const vaultConfig = {
+        address: options.vaultAddress,
+        token: options.vaultToken,
+        path: options.vaultPath
+      };
+
+      const secretsValidation = validateSecretsWithExternal(
+        mergedConfig, 
+        schema, 
+        env, 
+        {
+          useEnvSecrets: options.envSecrets,
+          useVault: options.vault,
+          vaultConfig
+        }
+      );
+
+      // Output results
+      if (options.format === 'json') {
+        console.log(JSON.stringify(secretsValidation, null, 2));
+      } else {
+        displaySecretsResults(secretsValidation, options.mask);
+      }
+
+      // Exit with appropriate code
+      const hasErrors = secretsValidation.issues.some(issue => issue.severity === 'error');
+      const hasWarnings = secretsValidation.warnings.length > 0;
+      
+      if (hasErrors) {
+        process.exit(1);
+      } else if (hasWarnings) {
+        process.exit(0);
+      } else {
+        process.exit(0);
+      }
+
+    } catch (err) {
+      console.error(chalk.red('❌ Secrets validation error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('explain-secret')
+  .description('Explain a specific configuration field with secret masking')
+  .requiredOption('--key <key>', 'Configuration key to explain')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--env <environment>', 'Environment to analyze (dev, prod, staging)', 'dev')
+  .option('--mask', 'Mask sensitive values in output')
+  .option('--vault', 'Include Vault integration suggestions')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const env = options.env;
+      const key = options.key;
+      
+      console.log(chalk.blue(`🔐 Explaining Secret: ${key} in ${env} environment`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}\n`));
+
+      // Load and merge configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
+      const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      // Explain with secrets
+      const explanation = explainWithSecrets(mergedConfig, key, env, {
+        maskSecrets: options.mask,
+        includeVault: options.vault
+      });
+
+      // Display explanation
+      displaySecretExplanation(explanation);
+
+    } catch (err) {
+      console.error(chalk.red('❌ Secret explanation error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// CI/CD HELPER COMMANDS
+program
+  .command('ci')
+  .description('Generate CI/CD configuration for various platforms')
+  .option('--platform <platform>', 'CI/CD platform (github, gitlab, jenkins, circleci, azure)', 'github')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--env <environment>', 'Environment to analyze for generation', 'dev')
+  .option('--output <file>', 'Output file path (default: .github/workflows/align-config.yml for GitHub)')
+  .option('--environments <list>', 'Comma-separated list of environments', 'dev,prod')
+  .option('--workflow-name <name>', 'Workflow name (GitHub Actions)', 'align-config')
+  .option('--security-scanning', 'Include security scanning jobs', true)
+  .option('--cache-dependencies', 'Enable dependency caching', true)
+  .option('--matrix-strategy', 'Use matrix strategy for builds (GitHub Actions)', true)
+  .option('--deployment-strategy <strategy>', 'Deployment strategy (manual, auto, none)', 'manual')
+  .option('--parallel-builds', 'Enable parallel builds (Jenkins)', true)
+  .option('--format <format>', 'Output format (yaml, json)', 'yaml')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const env = options.env;
+      const platform = options.platform.toLowerCase();
+      
+      console.log(chalk.blue(`🚀 CI/CD Configuration Generator: ${platform}`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}`));
+      console.log(chalk.gray(`🌍 Environment: ${env}`));
+      console.log('');
+
+      // Load and merge configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
+      const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      // Parse options
+      const environments = options.environments.split(',').map(e => e.trim());
+      const ciOptions = {
+        environments,
+        workflowName: options.workflowName,
+        securityScanning: options.securityScanning,
+        cacheDependencies: options.cacheDependencies,
+        matrixStrategy: options.matrixStrategy,
+        deploymentStrategy: options.deploymentStrategy,
+        parallelBuilds: options.parallelBuilds
+      };
+
+      // Generate CI/CD configuration
+      const ciConfig = generateCIConfig(platform, mergedConfig, ciOptions);
+
+      // Determine output file
+      let outputFile = options.output;
+      if (!outputFile) {
+        switch (platform) {
+          case 'github':
+          case 'github-actions':
+            outputFile = '.github/workflows/align-config.yml';
+            break;
+          case 'gitlab':
+          case 'gitlab-ci':
+            outputFile = '.gitlab-ci.yml';
+            break;
+          case 'jenkins':
+            outputFile = 'Jenkinsfile';
+            break;
+          case 'circleci':
+          case 'circle':
+            outputFile = '.circleci/config.yml';
+            break;
+          case 'azure':
+          case 'azure-devops':
+            outputFile = 'azure-pipelines.yml';
+            break;
+          default:
+            outputFile = `ci-config.${options.format}`;
+        }
+      }
+
+      // Create output directory if needed
+      const outputDir = path.dirname(outputFile);
+      if (outputDir !== '.') {
+        await fs.promises.mkdir(outputDir, { recursive: true });
+      }
+
+      // Write configuration file
+      let outputContent;
+      if (options.format === 'json') {
+        outputContent = JSON.stringify(ciConfig, null, 2);
+      } else {
+        outputContent = yaml.dump(ciConfig, { indent: 2 });
+      }
+
+      await fs.promises.writeFile(outputFile, outputContent);
+
+      // Display summary
+      console.log(chalk.green('✅ CI/CD configuration generated successfully!'));
+      console.log(chalk.gray(`📄 Output: ${outputFile}`));
+      console.log(chalk.gray(`🏗️  Platform: ${platform}`));
+      console.log(chalk.gray(`🌍 Environments: ${environments.join(', ')}`));
+      
+      if (options.securityScanning) {
+        console.log(chalk.blue('🔐 Security scanning included'));
+      }
+      if (options.cacheDependencies) {
+        console.log(chalk.blue('💾 Dependency caching enabled'));
+      }
+      if (options.matrixStrategy && platform === 'github') {
+        console.log(chalk.blue('📊 Matrix strategy enabled'));
+      }
+      if (options.parallelBuilds && platform === 'jenkins') {
+        console.log(chalk.blue('⚡ Parallel builds enabled'));
+      }
+
+      console.log('');
+      console.log(chalk.cyan('💡 Next steps:'));
+      console.log(chalk.gray(`  1. Review the generated ${outputFile}`));
+      console.log(chalk.gray('  2. Customize the configuration as needed'));
+      console.log(chalk.gray('  3. Commit and push to trigger CI/CD'));
+      console.log(chalk.gray('  4. Monitor the pipeline execution'));
+
+    } catch (err) {
+      console.error(chalk.red('❌ CI/CD generation error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// VERSIONING COMMANDS
+program
+  .command('version')
+  .description('Manage schema and configuration versions')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--env <environment>', 'Environment to analyze', 'dev')
+  .option('--schema <file>', 'Schema file path (align.schema.json)')
+  .option('--format <format>', 'Output format (text, json)', 'text')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const env = options.env;
+      
+      console.log(chalk.blue(`📋 Version Management: ${env} environment`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}\n`));
+
+      // Load schema if provided
+      let schema = null;
+      if (options.schema) {
+        const schemaPath = path.resolve(options.schema);
+        schema = loadSchema(schemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${schemaPath}`));
+        }
+      } else {
+        // Try to find align.schema.json in config directory
+        const defaultSchemaPath = path.join(configDir, 'align.schema.json');
+        schema = loadSchema(defaultSchemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${defaultSchemaPath}`));
+        }
+      }
+
+      // Load and merge configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
+      const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      // Get versions
+      const schemaVersion = getSchemaVersion(schema);
+      const configVersion = getConfigVersion(mergedConfig);
+
+      // Check for version issues
+      const versionIssues = detectVersionIssues(schema, mergedConfig);
+
+      // Output results
+      if (options.format === 'json') {
+        console.log(JSON.stringify({
+          schema: { version: schemaVersion },
+          config: { version: configVersion },
+          issues: versionIssues.issues,
+          warnings: versionIssues.warnings
+        }, null, 2));
+      } else {
+        displayVersionInfo(schemaVersion, configVersion, versionIssues);
+      }
+
+    } catch (err) {
+      console.error(chalk.red('❌ Version check error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('migrate')
+  .description('Migrate configuration to a new version')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--env <environment>', 'Environment to migrate', 'dev')
+  .option('--schema <file>', 'Schema file path (align.schema.json)')
+  .option('--to-version <version>', 'Target version for migration')
+  .option('--dry-run', 'Show migration plan without applying changes')
+  .option('--backup', 'Create backup before migration', true)
+  .option('--format <format>', 'Output format (text, json)', 'text')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const env = options.env;
+      const targetVersion = options.toVersion;
+      
+      console.log(chalk.blue(`🔄 Migration: ${env} environment`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}`));
+      if (targetVersion) {
+        console.log(chalk.gray(`🎯 Target version: ${targetVersion}`));
+      }
+      console.log('');
+
+      // Load schema if provided
+      let schema = null;
+      if (options.schema) {
+        const schemaPath = path.resolve(options.schema);
+        schema = loadSchema(schemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${schemaPath}`));
+        }
+      } else {
+        // Try to find align.schema.json in config directory
+        const defaultSchemaPath = path.join(configDir, 'align.schema.json');
+        schema = loadSchema(defaultSchemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${defaultSchemaPath}`));
+        }
+      }
+
+      // Load and merge configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
+      const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      const currentVersion = getConfigVersion(mergedConfig);
+      const targetVer = targetVersion || getSchemaVersion(schema);
+
+      // Validate migration compatibility
+      const compatibility = validateMigrationCompatibility(schema, mergedConfig, targetVer);
+
+      // Generate migration plan
+      const migrationPlan = generateVersionMigrationPlan(currentVersion, targetVer, schema, mergedConfig);
+
+      // Apply migration if not dry run
+      let migrationResult = null;
+      if (!options.dryRun) {
+        migrationResult = applyMigration(mergedConfig, migrationPlan, {
+          dryRun: false,
+          backup: options.backup
+        });
+      }
+
+      // Output results
+      if (options.format === 'json') {
+        console.log(JSON.stringify({
+          migrationPlan,
+          compatibility,
+          result: migrationResult
+        }, null, 2));
+      } else {
+        displayMigrationInfo(migrationPlan, compatibility, migrationResult, options.dryRun);
+      }
+
+    } catch (err) {
+      console.error(chalk.red('❌ Migration error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('bump')
+  .description('Bump version of schema or configuration')
+  .option('--config-dir <dir>', 'Configuration directory', './config')
+  .option('--env <environment>', 'Environment to bump', 'dev')
+  .option('--schema <file>', 'Schema file path (align.schema.json)')
+  .option('--type <type>', 'Bump type (major, minor, patch)', 'patch')
+  .option('--target <target>', 'Target to bump (schema, config, both)', 'both')
+  .option('--dry-run', 'Show what would be changed without applying')
+  .option('--format <format>', 'Output format (text, json)', 'text')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const env = options.env;
+      const bumpType = options.type;
+      const target = options.target;
+      
+      console.log(chalk.blue(`⬆️  Version Bump: ${env} environment`));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}`));
+      console.log(chalk.gray(`📈 Bump type: ${bumpType}`));
+      console.log(chalk.gray(`🎯 Target: ${target}`));
+      console.log('');
+
+      // Load schema if provided
+      let schema = null;
+      if (options.schema) {
+        const schemaPath = path.resolve(options.schema);
+        schema = loadSchema(schemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${schemaPath}`));
+        }
+      } else {
+        // Try to find align.schema.json in config directory
+        const defaultSchemaPath = path.join(configDir, 'align.schema.json');
+        schema = loadSchema(defaultSchemaPath);
+        if (schema) {
+          console.log(chalk.blue(`📋 Using schema: ${defaultSchemaPath}`));
+        }
+      }
+
+      // Load and merge configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
+      const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      const results = {
+        schema: null,
+        config: null
+      };
+
+      // Bump schema version
+      if (target === 'schema' || target === 'both') {
+        const oldSchemaVersion = getSchemaVersion(schema);
+        const newSchema = bumpSchemaVersion(schema, bumpType);
+        const newSchemaVersion = getSchemaVersion(newSchema);
+        
+        results.schema = {
+          oldVersion: oldSchemaVersion,
+          newVersion: newSchemaVersion,
+          changes: compareVersions(newSchemaVersion, oldSchemaVersion)
+        };
+      }
+
+      // Bump config version
+      if (target === 'config' || target === 'both') {
+        const oldConfigVersion = getConfigVersion(mergedConfig);
+        const newConfig = bumpConfigVersion(mergedConfig, bumpType);
+        const newConfigVersion = getConfigVersion(newConfig);
+        
+        results.config = {
+          oldVersion: oldConfigVersion,
+          newVersion: newConfigVersion,
+          changes: compareVersions(newConfigVersion, oldConfigVersion)
+        };
+      }
+
+      // Output results
+      if (options.format === 'json') {
+        console.log(JSON.stringify(results, null, 2));
+      } else {
+        displayBumpInfo(results, options.dryRun);
+      }
+
+    } catch (err) {
+      console.error(chalk.red('❌ Version bump error:'), err.message);
+      process.exit(1);
+    }
+  });
+
 program
   .command('diagnose')
   .description('Diagnose configuration environment for issues and inconsistencies')
@@ -1127,6 +1790,471 @@ function displayDiagnosisResults(diagnosis, generatePlan = false) {
     console.log(chalk.green('\n✅ No issues found! Your configuration is well-organized.'));
   } else {
     console.log(chalk.yellow('\n💡 Run "align repair" to automatically fix these issues.'));
+  }
+}
+
+// Helper function to display lint results
+function displayLintResults(lintResult, strict = false) {
+  const { issues, warnings, suggestions, summary } = lintResult;
+  
+  // Display summary
+  console.log(chalk.blue('📊 Lint Summary:'));
+  console.log(chalk.gray(`  Total Issues: ${summary.totalIssues}`));
+  console.log(chalk.yellow(`  Warnings: ${summary.totalWarnings}`));
+  console.log(chalk.cyan(`  Suggestions: ${summary.totalSuggestions}`));
+  console.log('');
+
+  // Display issues (errors)
+  if (issues.length > 0) {
+    console.log(chalk.red('❌ Issues:'));
+    issues.forEach((issue, index) => {
+      console.log(chalk.red(`  ${index + 1}. ${issue.message}`));
+      if (issue.details && issue.details.length > 0) {
+        issue.details.forEach(detail => {
+          if (detail.field) {
+            console.log(chalk.gray(`     Field: ${detail.field}`));
+          }
+          if (detail.value !== undefined) {
+            console.log(chalk.gray(`     Value: ${detail.value}`));
+          }
+          if (detail.reason) {
+            console.log(chalk.gray(`     Reason: ${detail.reason}`));
+          }
+          if (detail.pattern) {
+            console.log(chalk.gray(`     Pattern: ${detail.pattern}`));
+          }
+          if (detail.description) {
+            console.log(chalk.gray(`     Description: ${detail.description}`));
+          }
+          if (detail.configValue !== undefined && detail.schemaDefault !== undefined) {
+            console.log(chalk.gray(`     Config: ${detail.configValue}, Schema Default: ${detail.schemaDefault}`));
+          }
+        });
+      }
+      if (issue.suggestion) {
+        console.log(chalk.cyan(`     💡 ${issue.suggestion}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display warnings
+  if (warnings.length > 0) {
+    console.log(chalk.yellow('⚠️  Warnings:'));
+    warnings.forEach((warning, index) => {
+      console.log(chalk.yellow(`  ${index + 1}. ${warning.message}`));
+      if (warning.details && warning.details.length > 0) {
+        warning.details.forEach(detail => {
+          if (detail.field) {
+            console.log(chalk.gray(`     Field: ${detail.field}`));
+          }
+          if (detail.pattern) {
+            console.log(chalk.gray(`     Pattern: ${detail.pattern}`));
+          }
+          if (detail.description) {
+            console.log(chalk.gray(`     Description: ${detail.description}`));
+          }
+        });
+      }
+      if (warning.suggestion) {
+        console.log(chalk.cyan(`     💡 ${warning.suggestion}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display suggestions (best practices)
+  if (suggestions.length > 0) {
+    console.log(chalk.cyan('💡 Suggestions:'));
+    suggestions.forEach((suggestion, index) => {
+      const severityColor = suggestion.severity === 'error' ? chalk.red : 
+                           suggestion.severity === 'warning' ? chalk.yellow : 
+                           chalk.cyan;
+      
+      console.log(severityColor(`  ${index + 1}. ${suggestion.message}`));
+      if (suggestion.field) {
+        console.log(chalk.gray(`     Field: ${suggestion.field}`));
+      }
+      if (suggestion.suggestion) {
+        console.log(chalk.cyan(`     💡 ${suggestion.suggestion}`));
+      }
+      if (suggestion.impact) {
+        console.log(chalk.gray(`     Impact: ${suggestion.impact}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display final status
+  if (issues.length === 0 && warnings.length === 0) {
+    console.log(chalk.green('✅ No linting issues found!'));
+  } else if (issues.length === 0) {
+    console.log(chalk.yellow('⚠️  Configuration has warnings but no critical issues.'));
+  } else {
+    console.log(chalk.red('❌ Configuration has issues that need to be addressed.'));
+  }
+
+  if (strict && warnings.length > 0) {
+    console.log(chalk.yellow('⚠️  Warnings treated as errors (--strict mode).'));
+  }
+}
+
+// Helper function to display secrets results
+function displaySecretsResults(secretsValidation, maskSecrets = false) {
+  const { sensitiveFields, issues, warnings, suggestions, externalSecrets } = secretsValidation;
+  
+  // Display summary
+  console.log(chalk.blue('📊 Secrets Summary:'));
+  console.log(chalk.gray(`  Sensitive Fields: ${sensitiveFields.length}`));
+  console.log(chalk.red(`  Issues: ${issues.length}`));
+  console.log(chalk.yellow(`  Warnings: ${warnings.length}`));
+  console.log(chalk.cyan(`  Suggestions: ${suggestions.length}`));
+  console.log('');
+
+  // Display sensitive fields
+  if (sensitiveFields.length > 0) {
+    console.log(chalk.blue('🔐 Sensitive Fields Detected:'));
+    sensitiveFields.forEach((field, index) => {
+      console.log(chalk.cyan(`  ${index + 1}. ${field.field}`));
+      console.log(chalk.gray(`     Reason: ${field.reason}`));
+      if (maskSecrets) {
+        console.log(chalk.gray(`     Value: ${field.masked}`));
+      } else {
+        console.log(chalk.gray(`     Value: ${field.value}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display issues
+  if (issues.length > 0) {
+    console.log(chalk.red('❌ Security Issues:'));
+    issues.forEach((issue, index) => {
+      console.log(chalk.red(`  ${index + 1}. ${issue.message}`));
+      console.log(chalk.gray(`     Field: ${issue.field}`));
+      if (issue.suggestion) {
+        console.log(chalk.cyan(`     💡 ${issue.suggestion}`));
+      }
+      if (issue.impact) {
+        console.log(chalk.gray(`     Impact: ${issue.impact}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display warnings
+  if (warnings.length > 0) {
+    console.log(chalk.yellow('⚠️  Security Warnings:'));
+    warnings.forEach((warning, index) => {
+      console.log(chalk.yellow(`  ${index + 1}. ${warning.message}`));
+      console.log(chalk.gray(`     Field: ${warning.field}`));
+      if (warning.suggestion) {
+        console.log(chalk.cyan(`     💡 ${warning.suggestion}`));
+      }
+      if (warning.impact) {
+        console.log(chalk.gray(`     Impact: ${warning.impact}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display suggestions
+  if (suggestions.length > 0) {
+    console.log(chalk.cyan('💡 Security Suggestions:'));
+    suggestions.forEach((suggestion, index) => {
+      const severityColor = suggestion.severity === 'error' ? chalk.red : 
+                           suggestion.severity === 'warning' ? chalk.yellow : 
+                           chalk.cyan;
+      
+      console.log(severityColor(`  ${index + 1}. ${suggestion.message}`));
+      console.log(chalk.gray(`     Field: ${suggestion.field}`));
+      if (suggestion.suggestion) {
+        console.log(chalk.cyan(`     💡 ${suggestion.suggestion}`));
+      }
+      if (suggestion.impact) {
+        console.log(chalk.gray(`     Impact: ${suggestion.impact}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display external integrations
+  if (externalSecrets) {
+    if (externalSecrets.env && Object.keys(externalSecrets.env).length > 0) {
+      console.log(chalk.green('📄 .env.secret Integration:'));
+      console.log(chalk.gray(`  Found ${Object.keys(externalSecrets.env).length} secrets in .env.secret`));
+      Object.keys(externalSecrets.env).forEach(key => {
+        console.log(chalk.gray(`    - ${key}`));
+      });
+      console.log('');
+    }
+
+    if (externalSecrets.vault) {
+      console.log(chalk.green('🏦 Vault Integration:'));
+      console.log(chalk.gray(`  Vault Address: ${externalSecrets.vault.address}`));
+      console.log(chalk.gray(`  Vault Path: ${externalSecrets.vault.path}`));
+      console.log(chalk.gray(`  Status: Available for integration`));
+      console.log('');
+    }
+  }
+
+  // Display final status
+  if (issues.length === 0 && warnings.length === 0) {
+    console.log(chalk.green('✅ No security issues found!'));
+  } else if (issues.length === 0) {
+    console.log(chalk.yellow('⚠️  Configuration has security warnings but no critical issues.'));
+  } else {
+    console.log(chalk.red('❌ Configuration has security issues that need to be addressed.'));
+  }
+}
+
+// Helper function to display secret explanation
+function displaySecretExplanation(explanation) {
+  console.log(chalk.blue('🔐 Secret Field Explanation:'));
+  console.log(chalk.gray(`  Field: ${explanation.key}`));
+  console.log(chalk.gray(`  Environment: ${explanation.environment}`));
+  console.log('');
+
+  if (explanation.secretField) {
+    console.log(chalk.yellow('⚠️  This is a sensitive field'));
+    if (explanation.masked) {
+      console.log(chalk.gray(`  Value: ${explanation.finalValue} (masked)`));
+    }
+    console.log('');
+  }
+
+  console.log(chalk.blue('📊 Value Trace:'));
+  if (explanation.baseValue !== undefined) {
+    console.log(chalk.gray(`  Base config: ${explanation.baseValue}`));
+  }
+  if (explanation.envValue !== undefined) {
+    console.log(chalk.gray(`  Environment override: ${explanation.envValue}`));
+  }
+  console.log(chalk.green(`  Final value: ${explanation.finalValue}`));
+  console.log('');
+
+  if (explanation.vaultIntegration) {
+    console.log(chalk.blue('🏦 Vault Integration:'));
+    console.log(chalk.gray(`  Vault Address: ${explanation.vaultIntegration.vaultAddress}`));
+    console.log(chalk.cyan(`  💡 ${explanation.vaultIntegration.suggestion}`));
+    console.log('');
+  }
+
+  console.log(chalk.blue('💡 Recommendations:'));
+  if (explanation.secretField) {
+    console.log(chalk.cyan('  - Consider using external secret management'));
+    console.log(chalk.cyan('  - Rotate this secret regularly'));
+    console.log(chalk.cyan('  - Use environment variables in production'));
+  }
+  console.log(chalk.cyan('  - Review access controls for this field'));
+  console.log(chalk.cyan('  - Monitor for unauthorized access'));
+}
+
+// Helper function to display version information
+function displayVersionInfo(schemaVersion, configVersion, versionIssues) {
+  console.log(chalk.blue('📋 Version Information:'));
+  console.log(chalk.gray(`  Schema Version: ${schemaVersion}`));
+  console.log(chalk.gray(`  Config Version: ${configVersion}`));
+  console.log('');
+
+  // Check version compatibility
+  const comparison = compareVersions(configVersion, schemaVersion);
+  if (comparison === 0) {
+    console.log(chalk.green('✅ Versions are compatible'));
+  } else if (comparison < 0) {
+    console.log(chalk.yellow('⚠️  Config version is older than schema version'));
+  } else {
+    console.log(chalk.red('❌ Config version is newer than schema version'));
+  }
+  console.log('');
+
+  // Display issues
+  if (versionIssues.issues.length > 0) {
+    console.log(chalk.red('❌ Version Issues:'));
+    versionIssues.issues.forEach((issue, index) => {
+      console.log(chalk.red(`  ${index + 1}. ${issue.message}`));
+      if (issue.details) {
+        console.log(chalk.gray(`     Schema: ${issue.details.schemaVersion}`));
+        console.log(chalk.gray(`     Config: ${issue.details.configVersion}`));
+      }
+      if (issue.details?.suggestion) {
+        console.log(chalk.cyan(`     💡 ${issue.details.suggestion}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display warnings
+  if (versionIssues.warnings.length > 0) {
+    console.log(chalk.yellow('⚠️  Version Warnings:'));
+    versionIssues.warnings.forEach((warning, index) => {
+      console.log(chalk.yellow(`  ${index + 1}. ${warning.message}`));
+      if (warning.details) {
+        console.log(chalk.gray(`     Current: ${warning.details.currentVersion}`));
+        console.log(chalk.gray(`     Latest: ${warning.details.latestVersion}`));
+      }
+      if (warning.details?.suggestion) {
+        console.log(chalk.cyan(`     💡 ${warning.details.suggestion}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display final status
+  if (versionIssues.issues.length === 0 && versionIssues.warnings.length === 0) {
+    console.log(chalk.green('✅ No version issues found!'));
+  } else if (versionIssues.issues.length === 0) {
+    console.log(chalk.yellow('⚠️  Configuration has version warnings but no critical issues.'));
+  } else {
+    console.log(chalk.red('❌ Configuration has version issues that need to be addressed.'));
+  }
+}
+
+// Helper function to display migration information
+function displayMigrationInfo(migrationPlan, compatibility, migrationResult, dryRun) {
+  console.log(chalk.blue('🔄 Migration Plan:'));
+  console.log(chalk.gray(`  From: ${migrationPlan.fromVersion}`));
+  console.log(chalk.gray(`  To: ${migrationPlan.toVersion}`));
+  console.log('');
+
+  // Display compatibility issues
+  if (compatibility.issues.length > 0) {
+    console.log(chalk.red('❌ Compatibility Issues:'));
+    compatibility.issues.forEach((issue, index) => {
+      console.log(chalk.red(`  ${index + 1}. ${issue.message}`));
+      if (issue.details) {
+        console.log(chalk.gray(`     Current: ${issue.details.currentVersion}`));
+        console.log(chalk.gray(`     Target: ${issue.details.targetVersion}`));
+      }
+      if (issue.details?.suggestion) {
+        console.log(chalk.cyan(`     💡 ${issue.details.suggestion}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display compatibility warnings
+  if (compatibility.warnings.length > 0) {
+    console.log(chalk.yellow('⚠️  Compatibility Warnings:'));
+    compatibility.warnings.forEach((warning, index) => {
+      console.log(chalk.yellow(`  ${index + 1}. ${warning.message}`));
+      if (warning.details) {
+        console.log(chalk.gray(`     Schema: ${warning.details.schemaVersion}`));
+        console.log(chalk.gray(`     Target: ${warning.details.targetVersion}`));
+      }
+      if (warning.details?.suggestion) {
+        console.log(chalk.cyan(`     💡 ${warning.details.suggestion}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display migration steps
+  if (migrationPlan.steps.length > 0) {
+    console.log(chalk.blue('📋 Migration Steps:'));
+    migrationPlan.steps.forEach((step, index) => {
+      console.log(chalk.cyan(`  ${index + 1}. ${step.description}`));
+      console.log(chalk.gray(`     Action: ${step.action}`));
+      console.log('');
+    });
+  }
+
+  // Display breaking changes
+  if (migrationPlan.breakingChanges.length > 0) {
+    console.log(chalk.red('🚨 Breaking Changes:'));
+    migrationPlan.breakingChanges.forEach((change, index) => {
+      console.log(chalk.red(`  ${index + 1}. ${change.description}`));
+      console.log(chalk.gray(`     Impact: ${change.impact}`));
+      console.log('');
+    });
+  }
+
+  // Display new features
+  if (migrationPlan.newFeatures.length > 0) {
+    console.log(chalk.green('✨ New Features:'));
+    migrationPlan.newFeatures.forEach((feature, index) => {
+      console.log(chalk.green(`  ${index + 1}. ${feature.description}`));
+      console.log(chalk.gray(`     Impact: ${feature.impact}`));
+      console.log('');
+    });
+  }
+
+  // Display deprecated fields
+  if (migrationPlan.deprecatedFields.length > 0) {
+    console.log(chalk.yellow('⚠️  Deprecated Fields:'));
+    migrationPlan.deprecatedFields.forEach((field, index) => {
+      console.log(chalk.yellow(`  ${index + 1}. ${field.field}`));
+      if (field.replacement) {
+        console.log(chalk.gray(`     Replacement: ${field.replacement}`));
+      }
+      console.log('');
+    });
+  }
+
+  // Display migration results if applied
+  if (migrationResult && !dryRun) {
+    console.log(chalk.green('✅ Migration Results:'));
+    if (migrationResult.results.applied.length > 0) {
+      console.log(chalk.green(`  Applied: ${migrationResult.results.applied.length} changes`));
+      migrationResult.results.applied.forEach((change, index) => {
+        console.log(chalk.gray(`    ${index + 1}. ${change.step}`));
+        if (change.field && change.replacement) {
+          console.log(chalk.gray(`       ${change.field} → ${change.replacement}`));
+        }
+      });
+      console.log('');
+    }
+    if (migrationResult.results.skipped.length > 0) {
+      console.log(chalk.yellow(`  Skipped: ${migrationResult.results.skipped.length} steps`));
+      migrationResult.results.skipped.forEach((skip, index) => {
+        console.log(chalk.gray(`    ${index + 1}. ${skip.step} (${skip.reason})`));
+      });
+      console.log('');
+    }
+    if (migrationResult.results.errors.length > 0) {
+      console.log(chalk.red(`  Errors: ${migrationResult.results.errors.length} issues`));
+      migrationResult.results.errors.forEach((error, index) => {
+        console.log(chalk.red(`    ${index + 1}. ${error.step}: ${error.error}`));
+      });
+      console.log('');
+    }
+  }
+
+  // Display final status
+  if (dryRun) {
+    console.log(chalk.blue('🔍 This was a dry run. No changes were applied.'));
+    console.log(chalk.cyan('💡 Run without --dry-run to apply the migration.'));
+  } else if (migrationResult) {
+    console.log(chalk.green('✅ Migration completed successfully!'));
+  }
+}
+
+// Helper function to display version bump information
+function displayBumpInfo(results, dryRun) {
+  console.log(chalk.blue('⬆️  Version Bump Results:'));
+  console.log('');
+
+  if (results.schema) {
+    console.log(chalk.cyan('📋 Schema Version:'));
+    console.log(chalk.gray(`  Old: ${results.schema.oldVersion}`));
+    console.log(chalk.gray(`  New: ${results.schema.newVersion}`));
+    console.log(chalk.gray(`  Change: ${results.schema.changes > 0 ? 'increased' : 'decreased'}`));
+    console.log('');
+  }
+
+  if (results.config) {
+    console.log(chalk.cyan('⚙️  Config Version:'));
+    console.log(chalk.gray(`  Old: ${results.config.oldVersion}`));
+    console.log(chalk.gray(`  New: ${results.config.newVersion}`));
+    console.log(chalk.gray(`  Change: ${results.config.changes > 0 ? 'increased' : 'decreased'}`));
+    console.log('');
+  }
+
+  if (dryRun) {
+    console.log(chalk.blue('🔍 This was a dry run. No changes were applied.'));
+    console.log(chalk.cyan('💡 Run without --dry-run to apply the version bump.'));
+  } else {
+    console.log(chalk.green('✅ Version bump completed successfully!'));
   }
 }
 
