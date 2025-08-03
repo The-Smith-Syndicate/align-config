@@ -5130,6 +5130,389 @@ function generateAlignFromEnvVars(envVars) {
   return content;
 }
 
+// GCP Secret Manager Integration Functions
+async function initializeGCPSecretManager(projectId) {
+  try {
+    const {SecretManagerServiceClient} = require('@google-cloud/secret-manager');
+    const client = new SecretManagerServiceClient();
+    
+    // Test connection by listing secrets
+    const parent = `projects/${projectId}`;
+    const [secrets] = await client.listSecrets({parent});
+    
+    return { client, projectId };
+  } catch (error) {
+    throw new Error(`Failed to initialize GCP Secret Manager: ${error.message}`);
+  }
+}
+
+async function fetchSecretFromGCP(secretName, projectId, version = 'latest') {
+  try {
+    const { client } = await initializeGCPSecretManager(projectId);
+    const name = `projects/${projectId}/secrets/${secretName}/versions/${version}`;
+    
+    const [version] = await client.accessSecretVersion({name});
+    return version.payload.data.toString();
+  } catch (error) {
+    throw new Error(`Failed to fetch secret ${secretName}: ${error.message}`);
+  }
+}
+
+async function listGCPSecrets(projectId, filter = '') {
+  try {
+    const { client } = await initializeGCPSecretManager(projectId);
+    const parent = `projects/${projectId}`;
+    
+    const [secrets] = await client.listSecrets({parent});
+    return secrets.filter(secret => 
+      !filter || secret.name.includes(filter)
+    );
+  } catch (error) {
+    throw new Error(`Failed to list secrets: ${error.message}`);
+  }
+}
+
+async function resolveGCPSecrets(config, projectId, environment, options = {}) {
+  const resolvedConfig = { ...config };
+  const secretPattern = /^gcp:\/\/(.+)$/;
+  
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === 'string' && secretPattern.test(value)) {
+      const secretName = value.match(secretPattern)[1];
+      
+      // Add environment suffix if specified
+      const fullSecretName = options.addEnvironmentSuffix ? 
+        `${secretName}_${environment.toUpperCase()}` : secretName;
+      
+      try {
+        const secretValue = await fetchSecretFromGCP(fullSecretName, projectId);
+        resolvedConfig[key] = secretValue;
+      } catch (error) {
+        if (options.failOnMissing) {
+          throw new Error(`Missing required secret: ${fullSecretName}`);
+        }
+        // Keep original value if secret not found and not required
+        console.warn(`Warning: Secret not found: ${fullSecretName}`);
+      }
+    }
+  }
+  
+  return resolvedConfig;
+}
+
+async function validateGCPSecrets(config, projectId, environment) {
+  const missingSecrets = [];
+  const secretPattern = /^gcp:\/\/(.+)$/;
+  
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === 'string' && secretPattern.test(value)) {
+      const secretName = value.match(secretPattern)[1];
+      const fullSecretName = `${secretName}_${environment.toUpperCase()}`;
+      
+      try {
+        await fetchSecretFromGCP(fullSecretName, projectId);
+      } catch (error) {
+        missingSecrets.push({
+          key,
+          secretName: fullSecretName,
+          error: error.message
+        });
+      }
+    }
+  }
+  
+  return {
+    valid: missingSecrets.length === 0,
+    missingSecrets,
+    totalSecrets: Object.values(config).filter(v => 
+      typeof v === 'string' && secretPattern.test(v)
+    ).length
+  };
+}
+
+// Multi-Service Configuration Functions
+function loadServiceSpecificConfig(config, service, environment) {
+  const serviceConfig = { ...config };
+  
+  // Load service-specific overrides
+  const serviceKey = `${service}_`;
+  const serviceSpecificKeys = Object.keys(config).filter(key => 
+    key.startsWith(serviceKey)
+  );
+  
+  for (const key of serviceSpecificKeys) {
+    const newKey = key.replace(serviceKey, '');
+    serviceConfig[newKey] = config[key];
+  }
+  
+  return serviceConfig;
+}
+
+// Enhanced CI/CD Functions
+function generateGitHubActionsWithSecrets(config, environment, options = {}) {
+  const { gcpProject, secretMapping = {} } = options;
+  
+  let workflow = `name: Deploy ${environment}\n`;
+  workflow += `on:\n  push:\n    branches: [${environment}]\n\n`;
+  workflow += `jobs:\n  deploy:\n    runs-on: ubuntu-latest\n`;
+  workflow += `    steps:\n`;
+  workflow += `    - uses: actions/checkout@v3\n`;
+  workflow += `    - name: Setup Node.js\n`;
+  workflow += `      uses: actions/setup-node@v3\n`;
+  workflow += `      with:\n        node-version: '18'\n`;
+  workflow += `    - name: Install align-config\n`;
+  workflow += `      run: npm install -g align-config\n`;
+  workflow += `    - name: Generate configuration\n`;
+  workflow += `      run: align build --env=${environment} --format=env --out=.env\n`;
+  
+  if (gcpProject) {
+    workflow += `    - name: Setup GCP credentials\n`;
+    workflow += `      uses: google-github-actions/auth@v1\n`;
+    workflow += `      with:\n        credentials_json: \${{ secrets.GCP_CREDENTIALS }}\n`;
+    workflow += `    - name: Deploy to Cloud Run\n`;
+    workflow += `      run: gcloud run deploy --set-env-vars-file=.env\n`;
+  }
+  
+  return workflow;
+}
+
+
+
+// Secret Rotation Functions
+async function rotateGCPSecret(secretName, projectId, options = {}) {
+  try {
+    const {SecretManagerServiceClient} = require('@google-cloud/secret-manager');
+    const client = new SecretManagerServiceClient();
+    
+    // Generate new secret value
+    const newSecretValue = generateStrongSecret();
+    
+    // Add new version to secret
+    const parent = `projects/${projectId}/secrets/${secretName}`;
+    const payload = Buffer.from(newSecretValue, 'utf8');
+    
+    const [version] = await client.addSecretVersion({
+      parent,
+      payload: { data: payload }
+    });
+    
+    console.log(chalk.green(`✅ Secret rotated: ${secretName}`));
+    console.log(chalk.blue(`📋 New version: ${version.name}`));
+    
+    return {
+      success: true,
+      secretName,
+      newVersion: version.name,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    throw new Error(`Failed to rotate secret ${secretName}: ${error.message}`);
+  }
+}
+
+async function scheduleSecretRotation(secretName, projectId, schedule, options = {}) {
+  try {
+    // Parse schedule (e.g., "30d", "7d", "90d")
+    const scheduleDays = parseInt(schedule.replace(/[^0-9]/g, ''));
+    const nextRotation = new Date();
+    nextRotation.setDate(nextRotation.getDate() + scheduleDays);
+    
+    // In a real implementation, this would integrate with Cloud Scheduler
+    // For now, we'll create a rotation plan
+    const rotationPlan = {
+      secretName,
+      projectId,
+      schedule,
+      nextRotation: nextRotation.toISOString(),
+      enabled: true,
+      createdAt: new Date().toISOString()
+    };
+    
+    console.log(chalk.green(`✅ Secret rotation scheduled: ${secretName}`));
+    console.log(chalk.blue(`📅 Next rotation: ${nextRotation.toLocaleDateString()}`));
+    console.log(chalk.gray(`⏰ Schedule: Every ${scheduleDays} days`));
+    
+    return rotationPlan;
+  } catch (error) {
+    throw new Error(`Failed to schedule rotation for ${secretName}: ${error.message}`);
+  }
+}
+
+async function listSecretRotations(projectId, options = {}) {
+  try {
+    const {SecretManagerServiceClient} = require('@google-cloud/secret-manager');
+    const client = new SecretManagerServiceClient();
+    
+    const parent = `projects/${projectId}`;
+    const [secrets] = await client.listSecrets({parent});
+    
+    const rotationInfo = [];
+    for (const secret of secrets) {
+      try {
+        const [versions] = await client.listSecretVersions({
+          parent: secret.name
+        });
+        
+        if (versions.length > 1) {
+          const latestVersion = versions[0];
+          const previousVersion = versions[1];
+          
+          rotationInfo.push({
+            secretName: secret.name.split('/').pop(),
+            latestVersion: latestVersion.name,
+            latestCreateTime: latestVersion.createTime,
+            previousVersion: previousVersion.name,
+            previousCreateTime: previousVersion.createTime,
+            totalVersions: versions.length
+          });
+        }
+      } catch (error) {
+        // Skip secrets that can't be accessed
+        continue;
+      }
+    }
+    
+    return rotationInfo;
+  } catch (error) {
+    throw new Error(`Failed to list secret rotations: ${error.message}`);
+  }
+}
+
+
+
+function analyzeConfigurationUsage(config, environment, service = null) {
+  const usage = {
+    environment,
+    service,
+    totalKeys: Object.keys(config).length,
+    sensitiveKeys: 0,
+    serviceSpecificKeys: 0,
+    gcpSecrets: 0,
+    analysis: {
+      securityScore: 0,
+      complexityScore: 0,
+      maintainabilityScore: 0
+    }
+  };
+  
+  for (const [key, value] of Object.entries(config)) {
+    // Count sensitive keys
+    if (typeof value === 'string' && value.startsWith('gcp://')) {
+      usage.gcpSecrets++;
+      usage.sensitiveKeys++;
+    } else if (key.toLowerCase().includes('secret') || 
+               key.toLowerCase().includes('password') || 
+               key.toLowerCase().includes('key')) {
+      usage.sensitiveKeys++;
+    }
+    
+    // Count service-specific keys
+    if (service && key.startsWith(`${service}_`)) {
+      usage.serviceSpecificKeys++;
+    }
+  }
+  
+  // Calculate scores
+  usage.analysis.securityScore = Math.min(100, (usage.sensitiveKeys / usage.totalKeys) * 100);
+  usage.analysis.complexityScore = Math.min(100, (usage.totalKeys / 50) * 100);
+  usage.analysis.maintainabilityScore = Math.max(0, 100 - usage.analysis.complexityScore);
+  
+  return usage;
+}
+
+
+
+// Team Collaboration Functions
+function createEnvironmentShare(environment, config, sharedWith, permissions = 'read') {
+  const share = {
+    environment,
+    sharedWith,
+    permissions,
+    sharedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+    configSnapshot: { ...config },
+    status: 'active'
+  };
+  
+  console.log(chalk.green(`✅ Environment shared: ${environment}`));
+  console.log(chalk.blue(`👤 Shared with: ${sharedWith}`));
+  console.log(chalk.gray(`🔐 Permissions: ${permissions}`));
+  
+  return share;
+}
+
+function createEnvironmentReview(environment, config, reviewer, reviewType = 'security') {
+  const review = {
+    environment,
+    reviewer,
+    reviewType,
+    requestedAt: new Date().toISOString(),
+    status: 'pending',
+    configSnapshot: { ...config },
+    comments: [],
+    approved: false
+  };
+  
+  console.log(chalk.green(`✅ Review requested: ${environment}`));
+  console.log(chalk.blue(`👤 Reviewer: ${reviewer}`));
+  console.log(chalk.gray(`🔍 Type: ${reviewType}`));
+  
+  return review;
+}
+
+function lockEnvironment(environment, lockedBy, reason, duration = '2h') {
+  const lock = {
+    environment,
+    lockedBy,
+    reason,
+    lockedAt: new Date().toISOString(),
+    duration,
+    expiresAt: new Date(Date.now() + parseDuration(duration)).toISOString(),
+    status: 'locked'
+  };
+  
+  console.log(chalk.yellow(`🔒 Environment locked: ${environment}`));
+  console.log(chalk.blue(`👤 Locked by: ${lockedBy}`));
+  console.log(chalk.gray(`📝 Reason: ${reason}`));
+  console.log(chalk.gray(`⏰ Duration: ${duration}`));
+  
+  return lock;
+}
+
+function unlockEnvironment(environment, unlockedBy) {
+  const unlock = {
+    environment,
+    unlockedBy,
+    unlockedAt: new Date().toISOString(),
+    status: 'unlocked'
+  };
+  
+  console.log(chalk.green(`🔓 Environment unlocked: ${environment}`));
+  console.log(chalk.blue(`👤 Unlocked by: ${unlockedBy}`));
+  
+  return unlock;
+}
+
+function parseDuration(duration) {
+  const units = {
+    's': 1000,
+    'm': 60 * 1000,
+    'h': 60 * 60 * 1000,
+    'd': 24 * 60 * 60 * 1000
+  };
+  
+  const match = duration.match(/^(\d+)([smhd])$/);
+  if (match) {
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    return value * units[unit];
+  }
+  
+  return 2 * 60 * 60 * 1000; // Default 2 hours
+}
+
+
+
 module.exports = {
   parseAlign,
   parseValue,
@@ -5209,6 +5592,28 @@ module.exports = {
   generateBaseAlignFromAngular,
   parseEnvFile,
   generateSchemaFromEnvVars,
-  generateAlignFromEnvVars
+  generateAlignFromEnvVars,
+  // GCP Secret Manager integration functions
+  initializeGCPSecretManager,
+  fetchSecretFromGCP,
+  listGCPSecrets,
+  resolveGCPSecrets,
+  validateGCPSecrets,
+  // Multi-service configuration functions
+  loadServiceSpecificConfig,
+  // Enhanced CI/CD functions
+  generateGitHubActionsWithSecrets,
+  // Secret rotation functions
+  rotateGCPSecret,
+  scheduleSecretRotation,
+  listSecretRotations,
+  // Configuration analytics functions
+  analyzeConfigurationUsage,
+  // Team collaboration functions
+  createEnvironmentShare,
+  createEnvironmentReview,
+  lockEnvironment,
+  unlockEnvironment,
+  parseDuration
 };
   

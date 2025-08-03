@@ -25,7 +25,8 @@
     "chalk": "^4.1.2",
     "commander": "^14.0.0",
     "inquirer": "^8.2.6",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "@google-cloud/secret-manager": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

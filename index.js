@@ -33,7 +33,6 @@ const {
   inferSchemaFromFiles,
   diagnoseConfig,
   // Module-specific configuration functions
-  extractModuleConfig,
   discoverModuleSchemas,
   generateModuleConfig,
   validateModuleConfig,
@@ -42,14 +41,11 @@ const {
   applyLintFixes,
   writeFixedConfig,
   // Secrets management functions
-  detectSensitiveFields,
-  validateSecrets,
   explainWithSecrets,
   validateSecretsWithExternal,
   // CI/CD helper functions
   generateCIConfig,
   // Versioning support functions
-  addVersionToSchema,
   getSchemaVersion,
   getConfigVersion,
   compareVersions,
@@ -65,7 +61,26 @@ const {
   generateBaseAlignFromAngular,
   parseEnvFile,
   generateSchemaFromEnvVars,
-  generateAlignFromEnvVars
+  generateAlignFromEnvVars,
+  // GCP Secret Manager integration functions
+  listGCPSecrets,
+  resolveGCPSecrets,
+  validateGCPSecrets,
+  // Multi-service configuration functions
+  loadServiceSpecificConfig,
+  // Enhanced CI/CD functions
+  generateGitHubActionsWithSecrets,
+  // Secret rotation functions
+  rotateGCPSecret,
+  scheduleSecretRotation,
+  listSecretRotations,
+  // Configuration analytics functions
+  analyzeConfigurationUsage,
+  // Team collaboration functions
+  createEnvironmentShare,
+  createEnvironmentReview,
+  lockEnvironment,
+  unlockEnvironment
 } = require('./parser');
 const { Command } = require('commander');
 const chalk = require('chalk');
@@ -238,6 +253,9 @@ program
   .option('--schema <file>', 'Schema file path (align.schema.json)')
   .option('--k8s-configmap', 'Generate Kubernetes ConfigMap YAML')
   .option('--comments', 'Include field descriptions as comments in output (requires schema, not valid for standard JSON)')
+  .option('--service <service>', 'Service name (api, consumer) for service-specific configuration')
+  .option('--project <project>', 'GCP project ID for secret resolution')
+  .option('--secrets-from <provider>', 'Secret provider (gcp) for automatic secret resolution')
   .hook('preAction', (thisCommand, actionCommand) => {
     // Validate conflicting options
     const options = actionCommand.opts();
@@ -246,7 +264,7 @@ program
       process.exit(1);
     }
   })
-  .action((options) => {
+  .action(async (options) => {
     try {
       const configDir = path.resolve(options.configDir);
       const basePath = path.join(configDir, 'base.align');
@@ -333,7 +351,22 @@ program
 
       // Merge configs
       console.log(chalk.blue('🔄 Merging configurations...'));
-      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+      let mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      // Apply service-specific configuration
+      if (options.service) {
+        console.log(chalk.blue(`🔧 Applying service-specific configuration: ${options.service}`));
+        mergedConfig = loadServiceSpecificConfig(mergedConfig, options.service, options.env);
+      }
+
+      // Resolve GCP secrets if specified
+      if (options.secretsFrom === 'gcp' && options.project) {
+        console.log(chalk.blue(`🔐 Resolving GCP secrets from project: ${options.project}`));
+        mergedConfig = await resolveGCPSecrets(mergedConfig, options.project, options.env, {
+          addEnvironmentSuffix: true,
+          failOnMissing: true
+        });
+      }
 
       // Validate merged config against schema
       if (schema) {
@@ -989,6 +1022,10 @@ program
   .option('--vault-address <address>', 'Vault server address', 'http://localhost:8200')
   .option('--vault-token <token>', 'Vault authentication token')
   .option('--vault-path <path>', 'Vault secrets path', 'secret')
+  .option('--gcp', 'Check GCP Secret Manager integration')
+  .option('--project <project>', 'GCP project ID')
+  .option('--validate', 'Validate secrets exist in GCP')
+  .option('--list', 'List available secrets in GCP')
   .action(async (options) => {
     try {
       const configDir = path.resolve(options.configDir);
@@ -1018,6 +1055,42 @@ program
       const baseConfig = await loadConfig(path.join(configDir, 'base.align'), false);
       const envConfig = await loadConfig(path.join(configDir, `${env}.align`), false);
       const mergedConfig = mergeConfigs(baseConfig, envConfig);
+
+      // Handle GCP Secret Manager
+      if (options.gcp) {
+        if (!options.project) {
+          console.error(chalk.red('❌ GCP project ID required for GCP Secret Manager'));
+          console.log(chalk.gray('Use: align secrets --gcp --project=your-project-id'));
+          process.exit(1);
+        }
+        
+        console.log(chalk.blue(`🔐 GCP Secret Manager: ${options.project}`));
+        console.log(chalk.blue(`🌍 Environment: ${env}`));
+        
+        if (options.list) {
+          // List available secrets
+          const secrets = await listGCPSecrets(options.project);
+          console.log(chalk.green(`✅ Found ${secrets.length} secrets in project`));
+          
+          secrets.forEach(secret => {
+            console.log(chalk.gray(`  - ${secret.name.split('/').pop()}`));
+          });
+          return;
+        } else if (options.validate) {
+          // Validate secrets exist
+          const validation = await validateGCPSecrets(mergedConfig, options.project, env);
+          
+          if (validation.valid) {
+            console.log(chalk.green(`✅ All ${validation.totalSecrets} secrets are valid`));
+          } else {
+            console.log(chalk.red(`❌ ${validation.missingSecrets.length} secrets missing:`));
+            validation.missingSecrets.forEach(secret => {
+              console.log(chalk.red(`  - ${secret.secretName}: ${secret.error}`));
+            });
+          }
+          return;
+        }
+      }
 
       // Validate secrets with external integrations
       const vaultConfig = {
@@ -3383,6 +3456,433 @@ program
       
     } catch (error) {
       console.error(chalk.red('❌ Error migrating from .env:'), error.message);
+      process.exit(1);
+    }
+  });
+
+
+
+program
+  .command('build-ci')
+  .description('Build configuration for CI/CD with GCP integration')
+  .option('--env <environment>', 'Environment (default: dev)', 'dev')
+  .option('--service <service>', 'Service name (api, consumer)', 'api')
+  .option('--project <project>', 'GCP project ID')
+  .option('--output <file>', 'Output file (default: env-vars.txt)', 'env-vars.txt')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .option('--format <format>', 'Output format (env, json, yaml)', 'env')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const baseConfigPath = path.join(configDir, 'base.align');
+      const envConfigPath = path.join(configDir, `${options.env}.align`);
+      
+      // Load configurations
+      let baseConfig = {};
+      let envConfig = {};
+      
+      if (fs.existsSync(baseConfigPath)) {
+        const baseContent = fs.readFileSync(baseConfigPath, 'utf8');
+        baseConfig = parseAlign(baseContent);
+      }
+      
+      if (fs.existsSync(envConfigPath)) {
+        const envContent = fs.readFileSync(envConfigPath, 'utf8');
+        envConfig = parseAlign(envContent);
+      }
+      
+      // Merge configurations
+      let mergedConfig = mergeConfigs(baseConfig, envConfig);
+      
+      // Apply service-specific configuration
+      if (options.service) {
+        mergedConfig = loadServiceSpecificConfig(mergedConfig, options.service, options.env);
+      }
+      
+      // Resolve GCP secrets if project specified
+      if (options.project) {
+        console.log(chalk.blue(`🔐 Resolving GCP secrets from project: ${options.project}`));
+        mergedConfig = await resolveGCPSecrets(mergedConfig, options.project, options.env, {
+          addEnvironmentSuffix: true,
+          failOnMissing: true
+        });
+      }
+      
+      // Generate output
+      let output;
+      if (options.format === 'env') {
+        output = Object.entries(mergedConfig)
+          .map(([key, value]) => `${key.toUpperCase()}=${value}`)
+          .join('\n');
+      } else if (options.format === 'json') {
+        output = JSON.stringify(mergedConfig, null, 2);
+      } else if (options.format === 'yaml') {
+        output = yaml.dump(mergedConfig, { indent: 2 });
+      }
+      
+      // Write output file
+      fs.writeFileSync(options.output, output);
+      console.log(chalk.green(`✅ CI/CD configuration built: ${options.output}`));
+      console.log(chalk.blue(`📊 Keys: ${Object.keys(mergedConfig).length}`));
+      console.log(chalk.blue(`🌍 Environment: ${options.env}`));
+      console.log(chalk.blue(`🔧 Service: ${options.service}`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error building CI/CD config:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('validate-ci')
+  .description('Validate configuration for CI/CD deployment')
+  .option('--env <environment>', 'Environment (default: dev)', 'dev')
+  .option('--service <service>', 'Service name (api, consumer)', 'api')
+  .option('--project <project>', 'GCP project ID')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .option('--format <format>', 'Output format (github-actions, circleci)', 'github-actions')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const baseConfigPath = path.join(configDir, 'base.align');
+      const envConfigPath = path.join(configDir, `${options.env}.align`);
+      
+      // Load configurations
+      let baseConfig = {};
+      let envConfig = {};
+      
+      if (fs.existsSync(baseConfigPath)) {
+        const baseContent = fs.readFileSync(baseConfigPath, 'utf8');
+        baseConfig = parseAlign(baseContent);
+      }
+      
+      if (fs.existsSync(envConfigPath)) {
+        const envContent = fs.readFileSync(envConfigPath, 'utf8');
+        envConfig = parseAlign(envContent);
+      }
+      
+      // Merge configurations
+      let mergedConfig = mergeConfigs(baseConfig, envConfig);
+      
+      // Apply service-specific configuration
+      if (options.service) {
+        mergedConfig = loadServiceSpecificConfig(mergedConfig, options.service, options.env);
+      }
+      
+      console.log(chalk.blue(`🔍 Validating CI/CD configuration`));
+      console.log(chalk.blue(`🌍 Environment: ${options.env}`));
+      console.log(chalk.blue(`🔧 Service: ${options.service}`));
+      
+      // Validate GCP secrets if project specified
+      if (options.project) {
+        console.log(chalk.blue(`🔐 Validating GCP secrets in project: ${options.project}`));
+        const secretValidation = await validateGCPSecrets(mergedConfig, options.project, options.env);
+        
+        if (secretValidation.valid) {
+          console.log(chalk.green(`✅ All ${secretValidation.totalSecrets} secrets are valid`));
+        } else {
+          console.log(chalk.red(`❌ ${secretValidation.missingSecrets.length} secrets missing:`));
+          secretValidation.missingSecrets.forEach(secret => {
+            console.log(chalk.red(`  - ${secret.secretName}: ${secret.error}`));
+          });
+          process.exit(1);
+        }
+      }
+      
+      // Validate policies
+      const policiesPath = path.join(configDir, 'align.policies.json');
+      if (fs.existsSync(policiesPath)) {
+        const policies = loadPolicies(policiesPath);
+        const policyValidation = validatePolicies(mergedConfig, options.env, policies);
+        
+        if (policyValidation.valid) {
+          console.log(chalk.green('✅ All policies passed'));
+        } else {
+          console.log(chalk.red('❌ Policy violations:'));
+          policyValidation.violations.forEach(violation => {
+            console.log(chalk.red(`  - ${violation.field}: ${violation.message}`));
+          });
+          process.exit(1);
+        }
+      }
+      
+      console.log(chalk.green('✅ CI/CD validation passed'));
+      
+      // Generate CI/CD configuration if requested
+      if (options.format === 'github-actions') {
+        const workflow = generateGitHubActionsWithSecrets(mergedConfig, options.env, {
+          gcpProject: options.project
+        });
+        console.log(chalk.blue('📋 GitHub Actions workflow:'));
+        console.log(workflow);
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error validating CI/CD config:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('secrets-rotate')
+  .description('Rotate GCP secrets and manage secret rotation schedules')
+  .option('--project <project>', 'GCP project ID')
+  .option('--secret <secret>', 'Secret name to rotate')
+  .option('--schedule <schedule>', 'Schedule rotation (e.g., 30d, 7d, 90d)')
+  .option('--list', 'List secret rotation history')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .action(async (options) => {
+    try {
+      if (!options.project) {
+        console.error(chalk.red('❌ GCP project ID required'));
+        console.log(chalk.gray('Use: align secrets-rotate --project=your-project-id'));
+        process.exit(1);
+      }
+      
+      if (options.list) {
+        // List secret rotations
+        console.log(chalk.blue(`🔍 Listing secret rotations for project: ${options.project}`));
+        const rotations = await listSecretRotations(options.project);
+        
+        if (rotations.length === 0) {
+          console.log(chalk.yellow('⚠️  No secret rotations found'));
+        } else {
+          console.log(chalk.green(`✅ Found ${rotations.length} secrets with rotation history:`));
+          rotations.forEach(rotation => {
+            console.log(chalk.gray(`  - ${rotation.secretName}: ${rotation.totalVersions} versions`));
+            console.log(chalk.gray(`    Latest: ${rotation.latestCreateTime}`));
+            console.log(chalk.gray(`    Previous: ${rotation.previousCreateTime}`));
+          });
+        }
+      } else if (options.secret && options.schedule) {
+        // Schedule secret rotation
+        console.log(chalk.blue(`📅 Scheduling rotation for secret: ${options.secret}`));
+        const rotationPlan = await scheduleSecretRotation(options.secret, options.project, options.schedule);
+        console.log(chalk.green('✅ Rotation scheduled successfully'));
+      } else if (options.secret) {
+        // Rotate secret immediately
+        console.log(chalk.blue(`🔄 Rotating secret: ${options.secret}`));
+        const result = await rotateGCPSecret(options.secret, options.project);
+        console.log(chalk.green('✅ Secret rotated successfully'));
+      } else {
+        console.error(chalk.red('❌ Missing required options'));
+        console.log(chalk.gray('Use: align secrets-rotate --project=project --secret=secret-name'));
+        console.log(chalk.gray('Or: align secrets-rotate --project=project --secret=secret-name --schedule=30d'));
+        console.log(chalk.gray('Or: align secrets-rotate --project=project --list'));
+        process.exit(1);
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error managing secret rotation:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('analytics')
+  .description('Analyze configuration usage and changes')
+  .option('--env <environment>', 'Environment to analyze (default: dev)', 'dev')
+  .option('--service <service>', 'Service name (api, consumer)')
+  .option('--timeframe <timeframe>', 'Timeframe for analysis (e.g., 30d, 7d)', '30d')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .option('--format <format>', 'Output format (text, json)', 'text')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const baseConfigPath = path.join(configDir, 'base.align');
+      const envConfigPath = path.join(configDir, `${options.env}.align`);
+      
+      // Load configurations
+      let baseConfig = {};
+      let envConfig = {};
+      
+      if (fs.existsSync(baseConfigPath)) {
+        const baseContent = fs.readFileSync(baseConfigPath, 'utf8');
+        baseConfig = parseAlign(baseContent);
+      }
+      
+      if (fs.existsSync(envConfigPath)) {
+        const envContent = fs.readFileSync(envConfigPath, 'utf8');
+        envConfig = parseAlign(envContent);
+      }
+      
+      // Merge configurations
+      let mergedConfig = mergeConfigs(baseConfig, envConfig);
+      
+      // Apply service-specific configuration
+      if (options.service) {
+        mergedConfig = loadServiceSpecificConfig(mergedConfig, options.service, options.env);
+      }
+      
+      console.log(chalk.blue(`📊 Configuration Analytics: ${options.env}`));
+      console.log(chalk.blue(`⏰ Timeframe: ${options.timeframe}`));
+      
+      // Analyze configuration usage
+      const usage = analyzeConfigurationUsage(mergedConfig, options.env, options.service);
+      
+      if (options.format === 'json') {
+        console.log(JSON.stringify(usage, null, 2));
+      } else {
+        console.log(chalk.green(`📈 Usage Summary:`));
+        console.log(chalk.gray(`  Total Keys: ${usage.totalKeys}`));
+        console.log(chalk.gray(`  Sensitive Keys: ${usage.sensitiveKeys}`));
+        console.log(chalk.gray(`  GCP Secrets: ${usage.gcpSecrets}`));
+        if (options.service) {
+          console.log(chalk.gray(`  Service-Specific Keys: ${usage.serviceSpecificKeys}`));
+        }
+        
+        console.log(chalk.green(`📊 Analysis Scores:`));
+        console.log(chalk.gray(`  Security Score: ${usage.analysis.securityScore.toFixed(1)}%`));
+        console.log(chalk.gray(`  Complexity Score: ${usage.analysis.complexityScore.toFixed(1)}%`));
+        console.log(chalk.gray(`  Maintainability Score: ${usage.analysis.maintainabilityScore.toFixed(1)}%`));
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error analyzing configuration:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('share')
+  .description('Share environment configuration with team members')
+  .requiredOption('--env <environment>', 'Environment to share')
+  .requiredOption('--with <user>', 'User to share with')
+  .option('--permissions <permissions>', 'Permissions (read, write, admin)', 'read')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const baseConfigPath = path.join(configDir, 'base.align');
+      const envConfigPath = path.join(configDir, `${options.env}.align`);
+      
+      // Load configurations
+      let baseConfig = {};
+      let envConfig = {};
+      
+      if (fs.existsSync(baseConfigPath)) {
+        const baseContent = fs.readFileSync(baseConfigPath, 'utf8');
+        baseConfig = parseAlign(baseContent);
+      }
+      
+      if (fs.existsSync(envConfigPath)) {
+        const envContent = fs.readFileSync(envConfigPath, 'utf8');
+        envConfig = parseAlign(envContent);
+      }
+      
+      // Merge configurations
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+      
+      // Create share
+      const share = createEnvironmentShare(options.env, mergedConfig, options.with, options.permissions);
+      
+      console.log(chalk.green('✅ Environment shared successfully'));
+      console.log(chalk.blue(`📅 Expires: ${new Date(share.expiresAt).toLocaleDateString()}`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error sharing environment:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('review')
+  .description('Request review of environment configuration')
+  .requiredOption('--env <environment>', 'Environment to review')
+  .requiredOption('--reviewer <reviewer>', 'Reviewer username')
+  .option('--type <type>', 'Review type (security, compliance, performance)', 'security')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const baseConfigPath = path.join(configDir, 'base.align');
+      const envConfigPath = path.join(configDir, `${options.env}.align`);
+      
+      // Load configurations
+      let baseConfig = {};
+      let envConfig = {};
+      
+      if (fs.existsSync(baseConfigPath)) {
+        const baseContent = fs.readFileSync(baseConfigPath, 'utf8');
+        baseConfig = parseAlign(baseContent);
+      }
+      
+      if (fs.existsSync(envConfigPath)) {
+        const envContent = fs.readFileSync(envConfigPath, 'utf8');
+        envConfig = parseAlign(envContent);
+      }
+      
+      // Merge configurations
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+      
+      // Create review
+      const review = createEnvironmentReview(options.env, mergedConfig, options.reviewer, options.type);
+      
+      console.log(chalk.green('✅ Review requested successfully'));
+      console.log(chalk.blue(`📋 Review ID: ${review.environment}-${review.reviewer}-${Date.now()}`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error requesting review:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('lock')
+  .description('Lock environment to prevent changes')
+  .requiredOption('--env <environment>', 'Environment to lock')
+  .requiredOption('--reason <reason>', 'Reason for locking')
+  .option('--duration <duration>', 'Lock duration (e.g., 2h, 1d, 30m)', '2h')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const baseConfigPath = path.join(configDir, 'base.align');
+      const envConfigPath = path.join(configDir, `${options.env}.align`);
+      
+      // Load configurations
+      let baseConfig = {};
+      let envConfig = {};
+      
+      if (fs.existsSync(baseConfigPath)) {
+        const baseContent = fs.readFileSync(baseConfigPath, 'utf8');
+        baseConfig = parseAlign(baseContent);
+      }
+      
+      if (fs.existsSync(envConfigPath)) {
+        const envContent = fs.readFileSync(envConfigPath, 'utf8');
+        envConfig = parseAlign(envContent);
+      }
+      
+      // Merge configurations
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+      
+      // Lock environment
+      const lock = lockEnvironment(options.env, 'current-user', options.reason, options.duration);
+      
+      console.log(chalk.green('✅ Environment locked successfully'));
+      console.log(chalk.blue(`⏰ Expires: ${new Date(lock.expiresAt).toLocaleString()}`));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error locking environment:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('unlock')
+  .description('Unlock environment to allow changes')
+  .requiredOption('--env <environment>', 'Environment to unlock')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .action(async (options) => {
+    try {
+      // Unlock environment
+      const unlock = unlockEnvironment(options.env, 'current-user');
+      
+      console.log(chalk.green('✅ Environment unlocked successfully'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error unlocking environment:'), error.message);
       process.exit(1);
     }
   });
