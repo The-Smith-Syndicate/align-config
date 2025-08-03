@@ -2257,8 +2257,8 @@ function exportToJSONWithComments(config, schema = null) {
     const isLast = index === entries.length - 1;
     
     // Add comment if description exists in schema
-    if (schema && schema[key] && schema[key].description) {
-      output += `  // ${schema[key].description}\n`;
+    if (schema && schema.properties && schema.properties[key] && schema.properties[key].description) {
+      output += `  // ${schema.properties[key].description}\n`;
     }
     
     if (typeof value === 'string') {
@@ -2289,14 +2289,14 @@ function exportToYAMLWithComments(config, schema = null) {
     let result = '';
     
     // Add comment if description exists in schema
-    if (schema && schema[key] && schema[key].description) {
-      result += `${indent}# ${schema[key].description}\n`;
+    if (schema && schema.properties && schema.properties[key] && schema.properties[key].description) {
+      result += `${indent}# ${schema.properties[key].description}\n`;
     }
     
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
       result += `${indent}${key}:\n`;
       for (const [nestedKey, nestedValue] of Object.entries(value)) {
-        const nestedSchema = schema && schema[key] && schema[key].properties ? schema[key].properties : null;
+        const nestedSchema = schema && schema.properties && schema.properties[key] && schema.properties[key].properties ? schema.properties[key].properties : null;
         // Add comment for nested property if description exists
         if (nestedSchema && nestedSchema[nestedKey] && nestedSchema[nestedKey].description) {
           result += `${indent}  # ${nestedSchema[nestedKey].description}\n`;
@@ -2344,8 +2344,8 @@ function exportToPythonWithComments(config, schema = null, className = 'Settings
     const pythonKey = key.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
     
     // Add comment if description exists in schema
-    if (schema && schema[key] && schema[key].description) {
-      output += `    # ${schema[key].description}\n`;
+    if (schema && schema.properties && schema.properties[key] && schema.properties[key].description) {
+      output += `    # ${schema.properties[key].description}\n`;
     }
     
     if (typeof value === 'string') {
@@ -2378,8 +2378,8 @@ function exportToTOMLWithComments(config, schema = null) {
     const tomlKey = key.replace(/[^a-zA-Z0-9_]/g, '_');
     
     // Add comment if description exists in schema
-    if (schema && schema[key] && schema[key].description) {
-      output += `# ${schema[key].description}\n`;
+    if (schema && schema.properties && schema.properties[key] && schema.properties[key].description) {
+      output += `# ${schema.properties[key].description}\n`;
     }
     
     if (typeof value === 'string') {
@@ -2408,8 +2408,8 @@ function exportToPropertiesWithComments(config, schema = null) {
     const propKey = key.replace(/[^a-zA-Z0-9_]/g, '.');
     
     // Add comment if description exists in schema
-    if (schema && schema[key] && schema[key].description) {
-      output += `# ${schema[key].description}\n`;
+    if (schema && schema.properties && schema.properties[key] && schema.properties[key].description) {
+      output += `# ${schema.properties[key].description}\n`;
     }
     
     if (typeof value === 'string') {

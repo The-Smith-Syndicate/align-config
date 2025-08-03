@@ -505,7 +505,7 @@ DATABASE_URL="postgresql://localhost:5432/myapp_dev"
 ```bash
 # Build with comments from schema descriptions
 align build --env=dev --format=yaml --comments --out=./output/config.dev.yaml
-align build --env=prod --format=json --comments --out=./output/config.prod.json
+align build --env=prod --format=jsonc --comments --out=./output/config.prod.jsonc
 ```
 
 **YAML with Comments:**
@@ -526,7 +526,7 @@ debug: true
 database_url: "postgresql://localhost:5432/myapp_dev"
 ```
 
-**JSON with Comments:**
+**JSONC (JSON with Comments):**
 ```json
 {
   // Application name
@@ -539,6 +539,8 @@ database_url: "postgresql://localhost:5432/myapp_dev"
   "database_url": "postgresql://localhost:5432/myapp_dev"
 }
 ```
+
+**Note:** Standard JSON doesn't support comments. Use `--format=jsonc` for JSON with comments, or `--format=json` for valid JSON without comments.
 
 **🐍 Python (.py):**
 ```python
@@ -619,12 +621,12 @@ database_url = postgresql://localhost:5432/myapp_dev
 ```bash
 # Build with comments from schema descriptions
 align build --env=dev --format=yaml --comments --out=./output/config.dev.yaml
-align build --env=prod --format=json --comments --out=./output/config.prod.json
+align build --env=prod --format=jsonc --comments --out=./output/config.prod.jsonc
 ```
 
 #### Requirements
 - **Schema file required**: The `--comments` flag requires a schema file (`align.schema.json`) with field descriptions
-- **All formats supported**: Works with JSON, YAML, Python, TOML, Properties, HCL, INI, XML, and .env formats
+- **All formats supported**: Works with JSON, JSONC, YAML, Python, TOML, Properties, HCL, INI, XML, and .env formats
 - **Automatic detection**: Comments are only added for fields that have descriptions in the schema
 
 #### Benefits
@@ -673,7 +675,7 @@ debug: true
 - `--env <environment>`: Environment name (required)
 - `--out <file>`: Output file path (default: `./output/config.json`)
 - `--config-dir <dir>`: Configuration directory (default: `./config`)
-- `--format <format>`: Output format (json, yaml, env, python, toml, properties, hcl, ini, xml) (default: json)
+- `--format <format>`: Output format (json, jsonc, yaml, env, python, toml, properties, hcl, ini, xml) (default: json)
 - `--schema <file>`: Schema file path (align.schema.json)
 - `--comments`: Include field descriptions as comments in output (requires schema)
 - `--k8s-configmap`: Generate Kubernetes ConfigMap YAML
