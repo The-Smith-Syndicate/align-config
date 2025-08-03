@@ -85,23 +85,23 @@ program
       // Check if template exists
       if (!fs.existsSync(templateDir)) {
         console.error(chalk.red(`❌ Template not found: ${options.template}`));
-                         console.log(chalk.gray('Available templates:'));
-                 const templatesDir = path.join(__dirname, 'templates');
-                 if (fs.existsSync(templatesDir)) {
-                   const templates = fs.readdirSync(templatesDir, { withFileTypes: true })
-                     .filter(dirent => dirent.isDirectory())
-                     .map(dirent => dirent.name);
-                   templates.forEach(template => console.log(chalk.gray(`  - ${template}`)));
-                   console.log(chalk.blue('\nTemplate descriptions:'));
-                   console.log(chalk.gray('  - nodejs-api: Node.js API with Express, JWT, and database'));
-                   console.log(chalk.gray('  - python-api: Python API with FastAPI, authentication, and validation'));
-                   console.log(chalk.gray('  - go-api: Go API with Gin, database, and monitoring'));
-                   console.log(chalk.gray('  - react-app: React frontend with build optimization and analytics'));
-                   console.log(chalk.gray('  - nextjs-app: Next.js with SSR, API routes, and image optimization'));
-                   console.log(chalk.gray('  - angular-app: Angular with AOT compilation and service workers'));
-                   console.log(chalk.gray('  - microservices: Distributed system with service discovery and tracing'));
-                   console.log(chalk.gray('  - database: Database configuration with connection pooling and backup'));
-                 }
+        console.log(chalk.gray('Available templates:'));
+        const templatesDir = path.join(__dirname, 'templates');
+        if (fs.existsSync(templatesDir)) {
+          const templates = fs.readdirSync(templatesDir, { withFileTypes: true })
+            .filter(dirent => dirent.isDirectory())
+            .map(dirent => dirent.name);
+          templates.forEach(template => console.log(chalk.gray(`  - ${template}`)));
+          console.log(chalk.blue('\nTemplate descriptions:'));
+          console.log(chalk.gray('  - nodejs-api: Node.js API with Express, JWT, and database'));
+          console.log(chalk.gray('  - python-api: Python API with FastAPI, authentication, and validation'));
+          console.log(chalk.gray('  - go-api: Go API with Gin, database, and monitoring'));
+          console.log(chalk.gray('  - react-app: React frontend with build optimization and analytics'));
+          console.log(chalk.gray('  - nextjs-app: Next.js with SSR, API routes, and image optimization'));
+          console.log(chalk.gray('  - angular-app: Angular with AOT compilation and service workers'));
+          console.log(chalk.gray('  - microservices: Distributed system with service discovery and tracing'));
+          console.log(chalk.gray('  - database: Database configuration with connection pooling and backup'));
+        }
         process.exit(1);
       }
       
@@ -132,13 +132,13 @@ program
         }
       });
       
-      console.log(chalk.blue(`\n🎯 Template initialization complete!`));
+      console.log(chalk.blue('\n🎯 Template initialization complete!'));
       console.log(chalk.gray(`📁 Configuration directory: ${configDir}`));
       console.log(chalk.gray(`📄 Files created: ${copiedFiles}`));
-      console.log(chalk.blue(`\nNext steps:`));
+      console.log(chalk.blue('\nNext steps:'));
       console.log(chalk.gray(`1. Customize the configuration files in ${configDir}`));
       console.log(chalk.gray(`2. Validate: node index.js validate ${configDir}/base.align --base`));
-      console.log(chalk.gray(`3. Build: node index.js build --env=dev --out=./output/config.dev.json`));
+      console.log(chalk.gray('3. Build: node index.js build --env=dev --out=./output/config.dev.json'));
       
     } catch (err) {
       console.error(chalk.red('❌ Init error:'), err.message);
@@ -227,10 +227,10 @@ program
   .requiredOption('--env <environment>', 'Environment name (e.g., dev, prod)')
   .option('--out <file>', 'Output file path', './output/config.json')
   .option('--config-dir <dir>', 'Configuration directory', './config')
-  .option('--format <format>', 'Output format (json, yaml, env, python, toml, properties, hcl, ini, xml)', 'json')
+  .option('--format <format>', 'Output format (json, jsonc, yaml, env, python, toml, properties, hcl, ini, xml)', 'json')
   .option('--schema <file>', 'Schema file path (align.schema.json)')
   .option('--k8s-configmap', 'Generate Kubernetes ConfigMap YAML')
-  .option('--comments', 'Include field descriptions as comments in output (requires schema)')
+  .option('--comments', 'Include field descriptions as comments in output (requires schema, not valid for standard JSON)')
   .action((options) => {
     try {
       const configDir = path.resolve(options.configDir);
@@ -239,7 +239,7 @@ program
       const outPath = path.resolve(options.out);
 
       // Validate format
-      const supportedFormats = ['json', 'yaml', 'env', 'python', 'toml', 'properties', 'hcl', 'ini', 'xml'];
+      const supportedFormats = ['json', 'jsonc', 'yaml', 'env', 'python', 'toml', 'properties', 'hcl', 'ini', 'xml'];
       if (!supportedFormats.includes(options.format)) {
         console.error(chalk.red(`❌ Invalid format: ${options.format}. Supported: ${supportedFormats.join(', ')}`));
         process.exit(1);
@@ -332,6 +332,11 @@ program
         console.log(chalk.yellow('⚠️  --comments flag requires a schema file. Comments will not be included.'));
       }
       
+      // Warn about comments with standard JSON
+      if (options.comments && options.format === 'json') {
+        console.log(chalk.yellow('⚠️  Comments are not valid in standard JSON. Use --format=jsonc for JSON with comments.'));
+      }
+      
       if (options.format === 'yaml') {
         if (useComments) {
           output = exportToYAMLWithComments(mergedConfig, schema);
@@ -412,12 +417,17 @@ program
           output = exportToXML(mergedConfig);
         }
         fileExtension = '.xml';
-      } else {
+      } else if (options.format === 'jsonc') {
+        // JSON with comments (JSONC format)
         if (useComments) {
           output = exportToJSONWithComments(mergedConfig, schema);
         } else {
           output = JSON.stringify(mergedConfig, null, 2);
         }
+        fileExtension = '.jsonc';
+      } else {
+        // Standard JSON (always valid JSON, no comments)
+        output = JSON.stringify(mergedConfig, null, 2);
         fileExtension = '.json';
       }
 
@@ -431,7 +441,7 @@ program
       console.log(chalk.gray(`📊 Keys: ${Object.keys(mergedConfig).length}`));
       console.log(chalk.gray(`📋 Format: ${options.format.toUpperCase()}`));
       if (useComments) {
-        console.log(chalk.blue(`💬 Comments: Included from schema descriptions`));
+        console.log(chalk.blue('💬 Comments: Included from schema descriptions'));
       }
       
       // Show what was overridden
@@ -538,7 +548,7 @@ program
 
       // Show which file would be affected
       if (baseConfig[options.key] !== undefined) {
-        console.log(chalk.gray(`📁 Would override base.align value`));
+        console.log(chalk.gray('📁 Would override base.align value'));
       } else {
         console.log(chalk.gray(`📁 Would add to ${options.env}.align`));
       }
@@ -593,7 +603,7 @@ program
       const mergedConfig = mergeConfigs(baseConfig, envConfig);
       const finalValue = mergedConfig[options.key];
 
-      console.log(chalk.blue(`🔍 EXPLAIN: Tracing configuration key`));
+      console.log(chalk.blue('🔍 EXPLAIN: Tracing configuration key'));
       console.log(chalk.gray(`Key: ${options.key}`));
       console.log(chalk.gray(`Environment: ${options.env}`));
       console.log('');
@@ -623,7 +633,7 @@ program
         }
         
         if (explanation.validation) {
-          console.log(chalk.gray(`🔍 Validation:`));
+          console.log(chalk.gray('🔍 Validation:'));
           console.log(chalk.gray(`  Type: ${explanation.validation.type}`));
           console.log(chalk.gray(`  Required: ${explanation.validation.required}`));
           if (explanation.validation.default !== undefined) {
@@ -644,7 +654,7 @@ program
       if (baseValue !== undefined) {
         console.log(chalk.gray(`1. base.align         → ${options.key} = ${JSON.stringify(baseValue)}`));
       } else {
-        console.log(chalk.gray(`1. base.align         → (not defined)`));
+        console.log(chalk.gray('1. base.align         → (not defined)'));
       }
 
       // Step 2: Environment config
@@ -669,7 +679,7 @@ program
       if (baseValue !== undefined && envValue !== undefined) {
         console.log(chalk.yellow(`💡 Override detected: Value changed from ${JSON.stringify(baseValue)} to ${JSON.stringify(envValue)}`));
       } else if (baseValue !== undefined && envValue === undefined) {
-        console.log(chalk.green(`💡 Inherited: Value from base.align is being used`));
+        console.log(chalk.green('💡 Inherited: Value from base.align is being used'));
       } else if (baseValue === undefined && envValue !== undefined) {
         console.log(chalk.blue(`💡 Environment-specific: Value only defined in ${options.env}.align`));
       }
@@ -1101,27 +1111,27 @@ program
       let outputFile = options.output;
       if (!outputFile) {
         switch (platform) {
-          case 'github':
-          case 'github-actions':
-            outputFile = '.github/workflows/align-config.yml';
-            break;
-          case 'gitlab':
-          case 'gitlab-ci':
-            outputFile = '.gitlab-ci.yml';
-            break;
-          case 'jenkins':
-            outputFile = 'Jenkinsfile';
-            break;
-          case 'circleci':
-          case 'circle':
-            outputFile = '.circleci/config.yml';
-            break;
-          case 'azure':
-          case 'azure-devops':
-            outputFile = 'azure-pipelines.yml';
-            break;
-          default:
-            outputFile = `ci-config.${options.format}`;
+        case 'github':
+        case 'github-actions':
+          outputFile = '.github/workflows/align-config.yml';
+          break;
+        case 'gitlab':
+        case 'gitlab-ci':
+          outputFile = '.gitlab-ci.yml';
+          break;
+        case 'jenkins':
+          outputFile = 'Jenkinsfile';
+          break;
+        case 'circleci':
+        case 'circle':
+          outputFile = '.circleci/config.yml';
+          break;
+        case 'azure':
+        case 'azure-devops':
+          outputFile = 'azure-pipelines.yml';
+          break;
+        default:
+          outputFile = `ci-config.${options.format}`;
         }
       }
 
@@ -1868,8 +1878,8 @@ function displayLintResults(lintResult, strict = false) {
     console.log(chalk.cyan('💡 Suggestions:'));
     suggestions.forEach((suggestion, index) => {
       const severityColor = suggestion.severity === 'error' ? chalk.red : 
-                           suggestion.severity === 'warning' ? chalk.yellow : 
-                           chalk.cyan;
+        suggestion.severity === 'warning' ? chalk.yellow : 
+          chalk.cyan;
       
       console.log(severityColor(`  ${index + 1}. ${suggestion.message}`));
       if (suggestion.field) {
@@ -1963,8 +1973,8 @@ function displaySecretsResults(secretsValidation, maskSecrets = false) {
     console.log(chalk.cyan('💡 Security Suggestions:'));
     suggestions.forEach((suggestion, index) => {
       const severityColor = suggestion.severity === 'error' ? chalk.red : 
-                           suggestion.severity === 'warning' ? chalk.yellow : 
-                           chalk.cyan;
+        suggestion.severity === 'warning' ? chalk.yellow : 
+          chalk.cyan;
       
       console.log(severityColor(`  ${index + 1}. ${suggestion.message}`));
       console.log(chalk.gray(`     Field: ${suggestion.field}`));
@@ -1993,7 +2003,7 @@ function displaySecretsResults(secretsValidation, maskSecrets = false) {
       console.log(chalk.green('🏦 Vault Integration:'));
       console.log(chalk.gray(`  Vault Address: ${externalSecrets.vault.address}`));
       console.log(chalk.gray(`  Vault Path: ${externalSecrets.vault.path}`));
-      console.log(chalk.gray(`  Status: Available for integration`));
+      console.log(chalk.gray('  Status: Available for integration'));
       console.log('');
     }
   }
@@ -2011,32 +2021,27 @@ function displaySecretsResults(secretsValidation, maskSecrets = false) {
 // Helper function to display secret explanation
 function displaySecretExplanation(explanation) {
   console.log(chalk.blue('🔐 Secret Field Explanation:'));
-  console.log(chalk.gray(`  Field: ${explanation.key}`));
-  console.log(chalk.gray(`  Environment: ${explanation.environment}`));
+  console.log(chalk.gray(`  Field: ${explanation.field}`));
+  console.log(chalk.gray(`  Value: ${explanation.value}`));
   console.log('');
 
   if (explanation.secretField) {
     console.log(chalk.yellow('⚠️  This is a sensitive field'));
     if (explanation.masked) {
-      console.log(chalk.gray(`  Value: ${explanation.finalValue} (masked)`));
+      console.log(chalk.gray(`  Value: ${explanation.value} (masked)`));
     }
     console.log('');
   }
 
-  console.log(chalk.blue('📊 Value Trace:'));
-  if (explanation.baseValue !== undefined) {
-    console.log(chalk.gray(`  Base config: ${explanation.baseValue}`));
-  }
-  if (explanation.envValue !== undefined) {
-    console.log(chalk.gray(`  Environment override: ${explanation.envValue}`));
-  }
-  console.log(chalk.green(`  Final value: ${explanation.finalValue}`));
+  console.log(chalk.blue('📊 Value Details:'));
+  console.log(chalk.green(`  Final value: ${explanation.value}`));
   console.log('');
 
-  if (explanation.vaultIntegration) {
+  if (explanation.vault && explanation.vault.available) {
     console.log(chalk.blue('🏦 Vault Integration:'));
-    console.log(chalk.gray(`  Vault Address: ${explanation.vaultIntegration.vaultAddress}`));
-    console.log(chalk.cyan(`  💡 ${explanation.vaultIntegration.suggestion}`));
+    console.log(chalk.gray(`  Vault Address: ${explanation.vault.address}`));
+    console.log(chalk.gray(`  Vault Path: ${explanation.vault.path}`));
+    console.log(chalk.cyan(`  💡 Consider storing this secret in Vault for enhanced security`));
     console.log('');
   }
 
@@ -2622,7 +2627,7 @@ program
           process.exit(1);
         }
         
-        let content = fs.readFileSync(configPath, 'utf8');
+        const content = fs.readFileSync(configPath, 'utf8');
         const lines = content.split('\n');
         let updated = false;
         
@@ -3064,19 +3069,19 @@ program
       // Format output
       let output;
       switch (options.format.toLowerCase()) {
-        case 'json':
-          output = JSON.stringify(result.config, null, 2);
-          break;
-        case 'yaml':
-          output = yaml.dump(result.config);
-          break;
-        case 'env':
-          output = Object.entries(result.config)
-            .map(([key, value]) => `${key.toUpperCase()}=${JSON.stringify(value)}`)
-            .join('\n');
-          break;
-        default:
-          output = JSON.stringify(result.config, null, 2);
+      case 'json':
+        output = JSON.stringify(result.config, null, 2);
+        break;
+      case 'yaml':
+        output = yaml.dump(result.config);
+        break;
+      case 'env':
+        output = Object.entries(result.config)
+          .map(([key, value]) => `${key.toUpperCase()}=${JSON.stringify(value)}`)
+          .join('\n');
+        break;
+      default:
+        output = JSON.stringify(result.config, null, 2);
       }
       
       // Output result

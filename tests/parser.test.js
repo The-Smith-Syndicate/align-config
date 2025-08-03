@@ -159,10 +159,10 @@ describe('Parser Module', () => {
       
       const result = parseAlign(content);
       
-      expect(result.cors_origins).toEqual(["http://localhost:3000", "https://myapp.com"]);
-      expect(result.allowed_ips).toEqual(["192.168.1.1", "10.0.0.1"]);
+      expect(result.cors_origins).toEqual(['http://localhost:3000', 'https://myapp.com']);
+      expect(result.allowed_ips).toEqual(['192.168.1.1', '10.0.0.1']);
       expect(result.empty_array).toEqual([]);
-      expect(result.single_item).toEqual(["only-one"]);
+      expect(result.single_item).toEqual(['only-one']);
     });
 
     test('should handle arrays with quoted and unquoted items', () => {
@@ -172,7 +172,7 @@ describe('Parser Module', () => {
       
       const result = parseAlign(content);
       
-      expect(result.mixed_array).toEqual(["quoted", "unquoted", "another quoted"]);
+      expect(result.mixed_array).toEqual(['quoted', 'unquoted', 'another quoted']);
     });
   });
 
