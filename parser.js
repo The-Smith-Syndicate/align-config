@@ -2241,6 +2241,474 @@ function exportToXML(config, rootElement = 'config') {
   return output;
 }
 
+// Policy validation for environment-specific rules and guardrails
+function validatePolicies(config, environment, policies = {}) {
+  const violations = [];
+  
+  // Default policies for common scenarios
+  const defaultPolicies = {
+    production: {
+      'debug': { allowed: false, message: 'Debug mode should not be enabled in production' },
+      'log_level': { allowed: ['error', 'warn'], message: 'Production should use error or warn log level' },
+      'ssl': { required: true, message: 'SSL must be enabled in production' },
+      'timeout': { min: 5000, message: 'Production timeouts should be at least 5 seconds' },
+      'max_connections': { min: 10, message: 'Production should have adequate connection limits' }
+    },
+    development: {
+      'debug': { allowed: true, message: 'Debug mode is recommended for development' },
+      'log_level': { allowed: ['debug', 'info'], message: 'Development should use debug or info log level' },
+      'ssl': { required: false, message: 'SSL is optional in development' }
+    },
+    staging: {
+      'debug': { allowed: false, message: 'Debug mode should not be enabled in staging' },
+      'log_level': { allowed: ['info', 'warn'], message: 'Staging should use info or warn log level' },
+      'ssl': { required: true, message: 'SSL must be enabled in staging' }
+    }
+  };
+  
+  // Merge default policies with custom policies
+  const allPolicies = { ...defaultPolicies, ...policies };
+  const envPolicies = allPolicies[environment] || {};
+  
+  // Validate each policy rule
+  Object.entries(envPolicies).forEach(([key, policy]) => {
+    const value = config[key];
+    
+    // Check required values first (even if key doesn't exist)
+    if (policy.required !== undefined) {
+      if (policy.required && (value === undefined || value === null || value === '' || value === false)) {
+        violations.push({
+          key,
+          value,
+          environment,
+          rule: 'required',
+          message: policy.message || `${key} is required in ${environment}`
+        });
+      }
+    }
+    
+    if (value === undefined) {
+      // Skip other validations if key doesn't exist
+      return;
+    }
+    
+    // Check allowed values
+    if (policy.allowed !== undefined) {
+      if (Array.isArray(policy.allowed)) {
+        if (!policy.allowed.includes(value)) {
+          violations.push({
+            key,
+            value,
+            environment,
+            rule: 'allowed_values',
+            allowed: policy.allowed,
+            message: policy.message || `Value '${value}' is not allowed for ${key} in ${environment}`
+          });
+        }
+      } else {
+        if (value !== policy.allowed) {
+          violations.push({
+            key,
+            value,
+            environment,
+            rule: 'allowed_value',
+            allowed: policy.allowed,
+            message: policy.message || `Value '${value}' is not allowed for ${key} in ${environment}`
+          });
+        }
+      }
+    }
+    
+    // Check minimum values
+    if (policy.min !== undefined) {
+      if (typeof value === 'number' && value < policy.min) {
+        violations.push({
+          key,
+          value,
+          environment,
+          rule: 'min_value',
+          min: policy.min,
+          message: policy.message || `${key} must be at least ${policy.min} in ${environment}`
+        });
+      }
+    }
+    
+    // Check maximum values
+    if (policy.max !== undefined) {
+      if (typeof value === 'number' && value > policy.max) {
+        violations.push({
+          key,
+          value,
+          environment,
+          rule: 'max_value',
+          max: policy.max,
+          message: policy.message || `${key} must be at most ${policy.max} in ${environment}`
+        });
+      }
+    }
+    
+    // Check pattern matching
+    if (policy.pattern !== undefined) {
+      const regex = new RegExp(policy.pattern);
+      if (!regex.test(String(value))) {
+        violations.push({
+          key,
+          value,
+          environment,
+          rule: 'pattern',
+          pattern: policy.pattern,
+          message: policy.message || `${key} must match pattern ${policy.pattern} in ${environment}`
+        });
+      }
+    }
+    
+    // Check custom validation function
+    if (policy.validate !== undefined && typeof policy.validate === 'function') {
+      try {
+        const isValid = policy.validate(value, config, environment);
+        if (!isValid) {
+          violations.push({
+            key,
+            value,
+            environment,
+            rule: 'custom_validation',
+            message: policy.message || `Custom validation failed for ${key} in ${environment}`
+          });
+        }
+      } catch (error) {
+        violations.push({
+          key,
+          value,
+          environment,
+          rule: 'validation_error',
+          message: `Validation error for ${key}: ${error.message}`
+        });
+      }
+    }
+  });
+  
+  return {
+    valid: violations.length === 0,
+    violations,
+    environment,
+    policiesApplied: Object.keys(envPolicies)
+  };
+}
+
+// Load policies from file
+function loadPolicies(policyPath) {
+  const fs = require('fs');
+  const path = require('path');
+  
+  try {
+    if (fs.existsSync(policyPath)) {
+      const content = fs.readFileSync(policyPath, 'utf8');
+      return JSON.parse(content);
+    }
+  } catch (error) {
+    console.warn(`Warning: Could not load policies from ${policyPath}: ${error.message}`);
+  }
+  
+  return {};
+}
+
+// Generate policy suggestions based on configuration
+function suggestPolicies(config, environment) {
+  const suggestions = [];
+  
+  // Suggest policies based on common patterns
+  if (config.debug === true && environment === 'production') {
+    suggestions.push({
+      key: 'debug',
+      rule: 'allowed',
+      value: false,
+      message: 'Debug mode should be disabled in production',
+      severity: 'critical'
+    });
+  }
+  
+  if (config.log_level === 'debug' && environment === 'production') {
+    suggestions.push({
+      key: 'log_level',
+      rule: 'allowed',
+      value: ['error', 'warn'],
+      message: 'Production should use error or warn log level',
+      severity: 'warning'
+    });
+  }
+  
+  if (config.ssl === false && environment === 'production') {
+    suggestions.push({
+      key: 'ssl',
+      rule: 'required',
+      value: true,
+      message: 'SSL must be enabled in production',
+      severity: 'critical'
+    });
+  }
+  
+  if (config.timeout && typeof config.timeout === 'number' && config.timeout < 5000 && environment === 'production') {
+    suggestions.push({
+      key: 'timeout',
+      rule: 'min',
+      value: 5000,
+      message: 'Production timeouts should be at least 5 seconds',
+      severity: 'warning'
+    });
+  }
+  
+  return suggestions;
+}
+
+// Schema inference - automatically generate schemas from existing .align files
+function inferSchema(config, options = {}) {
+  const schema = {};
+  
+  for (const [key, value] of Object.entries(config)) {
+    const inferredType = inferType(value);
+    const schemaField = {
+      type: inferredType,
+      required: options.markAllRequired || false, // Default to false
+      description: `Inferred from ${key}`
+    };
+    
+    // Add default value if not required
+    if (!schemaField.required) {
+      schemaField.default = value;
+    }
+    
+    // Add additional type-specific properties
+    if (inferredType === 'string') {
+      if (options.inferPatterns && isUrl(value)) {
+        schemaField.pattern = '^https?://.*$';
+      } else if (options.inferPatterns && isEmail(value)) {
+        schemaField.pattern = '^[^@]+@[^@]+\\.[^@]+$';
+      }
+    } else if (inferredType === 'number') {
+      if (options.inferRanges) {
+        schemaField.min = value > 0 ? 1 : 0;
+        schemaField.max = value * 10; // Reasonable upper bound
+      }
+    } else if (inferredType === 'array') {
+      if (value.length > 0) {
+        const firstItemType = inferType(value[0]);
+        schemaField.items = { type: firstItemType };
+      }
+    }
+    
+    schema[key] = schemaField;
+  }
+  
+  return schema;
+}
+
+// Helper function to infer type from value
+function inferType(value) {
+  if (typeof value === 'string') {
+    return 'string';
+  } else if (typeof value === 'number') {
+    return 'number';
+  } else if (typeof value === 'boolean') {
+    return 'boolean';
+  } else if (Array.isArray(value)) {
+    return 'array';
+  } else if (value === null || value === undefined) {
+    return 'string'; // Default to string for null/undefined
+  } else {
+    return 'string'; // Fallback
+  }
+}
+
+// Helper function to detect URLs
+function isUrl(value) {
+  if (typeof value !== 'string') return false;
+  return value.startsWith('http://') || value.startsWith('https://') || 
+         value.startsWith('ws://') || value.startsWith('wss://') ||
+         value.startsWith('postgresql://') || value.startsWith('mysql://') ||
+         value.startsWith('redis://') || value.startsWith('mongodb://');
+}
+
+// Helper function to detect emails
+function isEmail(value) {
+  if (typeof value !== 'string') return false;
+  return /^[^@]+@[^@]+\.[^@]+$/.test(value);
+}
+
+// Infer schema from multiple config files (base + environments)
+function inferSchemaFromFiles(baseConfig, envConfigs = {}, options = {}) {
+  // Start with base config
+  let mergedConfig = { ...baseConfig };
+  
+  // Merge all environment configs to get complete picture
+  for (const [envName, envConfig] of Object.entries(envConfigs)) {
+    mergedConfig = { ...mergedConfig, ...envConfig };
+  }
+  
+  // Infer schema from merged config
+  const schema = inferSchema(mergedConfig, options);
+  
+  // Add metadata
+  schema._metadata = {
+    inferred: true,
+    source: 'auto-generated from .align files',
+    generated_at: new Date().toISOString(),
+    options: options
+  };
+  
+  return schema;
+}
+
+// Helper function to generate .align content
+function generateAlignContent(config) {
+  const lines = [];
+  lines.push('# Generated by Align Interactive CLI');
+  lines.push('');
+  
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === 'string') {
+      lines.push(`${key} = "${value}"`);
+    } else if (typeof value === 'number') {
+      lines.push(`${key} = ${value}`);
+    } else if (typeof value === 'boolean') {
+      lines.push(`${key} = ${value}`);
+    } else if (Array.isArray(value)) {
+      const arrayStr = value.map(v => 
+        typeof v === 'string' ? `"${v}"` : v
+      ).join(',');
+      lines.push(`${key} = [${arrayStr}]`);
+    } else if (value === null) {
+      lines.push(`${key} = null`);
+    } else if (value === undefined) {
+      lines.push(`${key} = undefined`);
+    } else {
+      lines.push(`${key} = ${JSON.stringify(value)}`);
+    }
+  }
+  
+  return lines.join('\n');
+}
+
+// Module-specific configuration - extract configs for specific modules
+function extractModuleConfig(config, moduleSchema) {
+  const moduleConfig = {};
+  const errors = [];
+  
+  // Extract only the keys that this module needs
+  for (const [key, schema] of Object.entries(moduleSchema.properties || {})) {
+    if (config.hasOwnProperty(key)) {
+      moduleConfig[key] = config[key];
+    } else if (schema.required) {
+      errors.push(`Missing required field for module: ${key}`);
+    }
+  }
+  
+  // Validate the extracted config
+  const validation = validateConfig(moduleConfig, moduleSchema);
+  if (validation && validation.errors && validation.errors.length > 0) {
+    errors.push(...validation.errors);
+  }
+  
+  return {
+    config: moduleConfig,
+    errors: errors,
+    missing: Object.keys(moduleSchema.properties || {}).filter(key => !config.hasOwnProperty(key))
+  };
+}
+
+function discoverModuleSchemas(configDir = './config') {
+  const modules = [];
+  
+  // Look for module schemas in config/modules/
+  const modulesDir = path.join(configDir, 'modules');
+  if (fs.existsSync(modulesDir)) {
+    const moduleDirs = fs.readdirSync(modulesDir, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name);
+    
+    for (const moduleName of moduleDirs) {
+      const schemaPath = path.join(modulesDir, moduleName, 'align.schema.json');
+      if (fs.existsSync(schemaPath)) {
+        try {
+          const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+          modules.push({
+            name: moduleName,
+            schema: schema,
+            path: schemaPath
+          });
+        } catch (error) {
+          console.warn(`Warning: Could not parse schema for module ${moduleName}: ${error.message}`);
+        }
+      }
+    }
+  }
+  
+  // Also look for modules in node_modules (existing package schemas)
+  try {
+    const packageSchemas = discoverPackageSchemas();
+    for (const [packageName, schema] of Object.entries(packageSchemas)) {
+      if (schema.module) {
+        modules.push({
+          name: packageName,
+          schema: schema,
+          path: `node_modules/${packageName}/align.schema.json`,
+          isPackage: true
+        });
+      }
+    }
+  } catch (error) {
+    // Ignore package schema discovery errors
+  }
+  
+  return modules;
+}
+
+function generateModuleConfig(config, moduleName, environment = 'dev', configDir = './config') {
+  // Find the module schema
+  const modules = discoverModuleSchemas(configDir);
+  const module = modules.find(m => m.name === moduleName);
+  
+  if (!module) {
+    throw new Error(`Module not found: ${moduleName}`);
+  }
+  
+  // Extract module-specific config
+  const result = extractModuleConfig(config, module.schema);
+  
+  return {
+    module: moduleName,
+    environment: environment,
+    config: result.config,
+    errors: result.errors || [],
+    missing: result.missing || [],
+    schema: module.schema,
+    isPackage: module.isPackage || false
+  };
+}
+
+function validateModuleConfig(config, moduleName, environment = 'dev', configDir = './config') {
+  try {
+    const result = generateModuleConfig(config, moduleName, environment, configDir);
+    
+    return {
+      valid: result.errors.length === 0,
+      errors: result.errors,
+      warnings: result.missing.length > 0 ? [`Missing optional fields: ${result.missing.join(', ')}`] : [],
+      module: moduleName,
+      environment: environment,
+      config: result.config
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      errors: [error.message],
+      warnings: [],
+      module: moduleName,
+      environment: environment,
+      config: {}
+    };
+  }
+}
+
 module.exports = {
   parseAlign,
   parseValue,
@@ -2267,6 +2735,20 @@ module.exports = {
   exportToProperties,
   exportToHCL,
   exportToINI,
-  exportToXML
+  exportToXML,
+  // Policy validation functions
+  validatePolicies,
+  loadPolicies,
+  suggestPolicies,
+  inferSchema,
+  inferType,
+  isUrl,
+  isEmail,
+  inferSchemaFromFiles,
+  generateAlignContent,
+  extractModuleConfig,
+  discoverModuleSchemas,
+  generateModuleConfig,
+  validateModuleConfig
 };
   

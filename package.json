@@ -1,6 +1,6 @@
 {
   "name": "align-config",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Align - A domain-specific configuration language and toolchain",
   "main": "lib.js",
   "bin": {
@@ -11,12 +11,18 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
   },
-  "keywords": ["config", "cli", "configuration", "validation"],
+  "keywords": [
+    "config",
+    "cli",
+    "configuration",
+    "validation"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^14.0.0",
+    "inquirer": "^8.2.6",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {

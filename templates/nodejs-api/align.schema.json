@@ -1,150 +1,154 @@
 {
-  "app_name": {
-    "type": "string",
-    "required": true,
-    "minLength": 1,
-    "maxLength": 50
-  },
-  "version": {
-    "type": "string",
-    "required": true,
-    "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
-  },
-  "port": {
-    "type": "number",
-    "required": false,
-    "min": 1,
-    "max": 65535,
-    "default": 3000
-  },
-  "host": {
-    "type": "string",
-    "required": false,
-    "default": "0.0.0.0"
-  },
-  "timeout": {
-    "type": "number",
-    "required": false,
-    "min": 1000,
-    "max": 300000,
-    "default": 30000
-  },
-  "body_limit": {
-    "type": "string",
-    "required": false,
-    "pattern": "^[0-9]+[KMGTPEZYkmgtpezy]i?$|^[0-9]+[kmgtpezy]b$"
-  },
-  "database_url": {
-    "type": "string",
-    "required": false,
-    "pattern": "^[a-zA-Z]+://.*$"
-  },
-  "database_pool_size": {
-    "type": "number",
-    "required": false,
-    "min": 1,
-    "max": 100,
-    "default": 10
-  },
-  "database_timeout": {
-    "type": "number",
-    "required": false,
-    "min": 1000,
-    "max": 30000,
-    "default": 5000
-  },
-  "jwt_secret": {
-    "type": "string",
-    "required": false,
-    "minLength": 32,
-    "maxLength": 256
-  },
-  "jwt_expires_in": {
-    "type": "string",
-    "required": false,
-    "pattern": "^[0-9]+[smhd]$"
-  },
-  "bcrypt_rounds": {
-    "type": "number",
-    "required": false,
-    "min": 8,
-    "max": 16,
-    "default": 12
-  },
-  "log_level": {
-    "type": "string",
-    "required": false,
-    "pattern": "^(debug|info|warn|error)$",
-    "default": "info"
-  },
-  "log_format": {
-    "type": "string",
-    "required": false,
-    "pattern": "^(json|pretty|simple)$",
-    "default": "json"
-  },
-  "log_file": {
-    "type": "string",
-    "required": false
-  },
-  "cors_enabled": {
-    "type": "boolean",
-    "required": false,
-    "default": true
-  },
-  "cors_origins": {
-    "type": "array",
-    "required": false,
-    "items": {
-      "type": "string"
+  "type": "object",
+  "properties": {
+    "app_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50,
+      "description": "Application name"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Application version"
+    },
+    "port": {
+      "type": "number",
+      "min": 1,
+      "max": 65535,
+      "default": 3000,
+      "description": "Server port"
+    },
+    "host": {
+      "type": "string",
+      "default": "0.0.0.0",
+      "description": "Server host"
+    },
+    "timeout": {
+      "type": "number",
+      "min": 1000,
+      "max": 300000,
+      "default": 30000,
+      "description": "Request timeout in milliseconds"
+    },
+    "body_limit": {
+      "type": "string",
+      "pattern": "^[0-9]+[KMGTPEZYkmgtpezy]i?$|^[0-9]+[kmgtpezy]b$",
+      "description": "Request body size limit"
+    },
+    "database_url": {
+      "type": "string",
+      "pattern": "^[a-zA-Z]+://.*$",
+      "description": "Database connection URL"
+    },
+    "database_pool_size": {
+      "type": "number",
+      "min": 1,
+      "max": 100,
+      "default": 10,
+      "description": "Database connection pool size"
+    },
+    "database_timeout": {
+      "type": "number",
+      "min": 1000,
+      "max": 30000,
+      "default": 5000,
+      "description": "Database connection timeout"
+    },
+    "jwt_secret": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 256,
+      "description": "JWT signing secret"
+    },
+    "jwt_expires_in": {
+      "type": "string",
+      "pattern": "^[0-9]+[smhd]$",
+      "description": "JWT token expiration"
+    },
+    "bcrypt_rounds": {
+      "type": "number",
+      "min": 8,
+      "max": 16,
+      "default": 12,
+      "description": "BCrypt hashing rounds"
+    },
+    "log_level": {
+      "type": "string",
+      "pattern": "^(debug|info|warn|error)$",
+      "default": "info",
+      "description": "Logging level"
+    },
+    "log_format": {
+      "type": "string",
+      "pattern": "^(json|pretty|simple)$",
+      "default": "json",
+      "description": "Logging format"
+    },
+    "log_file": {
+      "type": "string",
+      "description": "Log file path"
+    },
+    "cors_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable CORS"
+    },
+    "cors_origins": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Allowed CORS origins"
+    },
+    "rate_limit_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable rate limiting"
+    },
+    "rate_limit_window": {
+      "type": "number",
+      "min": 60000,
+      "max": 3600000,
+      "default": 900000,
+      "description": "Rate limit window in milliseconds"
+    },
+    "rate_limit_max": {
+      "type": "number",
+      "min": 10,
+      "max": 10000,
+      "default": 100,
+      "description": "Maximum requests per window"
+    },
+    "health_check_path": {
+      "type": "string",
+      "default": "/health",
+      "description": "Health check endpoint"
+    },
+    "metrics_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable metrics collection"
+    },
+    "metrics_port": {
+      "type": "number",
+      "min": 1,
+      "max": 65535,
+      "default": 9090,
+      "description": "Metrics server port"
+    },
+    "redis_url": {
+      "type": "string",
+      "pattern": "^redis://.*$",
+      "description": "Redis connection URL"
+    },
+    "cache_ttl": {
+      "type": "number",
+      "min": 0,
+      "max": 86400,
+      "default": 3600,
+      "description": "Cache TTL in seconds"
     }
   },
-  "rate_limit_enabled": {
-    "type": "boolean",
-    "required": false,
-    "default": true
-  },
-  "rate_limit_window": {
-    "type": "number",
-    "required": false,
-    "min": 60000,
-    "max": 3600000,
-    "default": 900000
-  },
-  "rate_limit_max": {
-    "type": "number",
-    "required": false,
-    "min": 10,
-    "max": 10000,
-    "default": 100
-  },
-  "health_check_path": {
-    "type": "string",
-    "required": false,
-    "default": "/health"
-  },
-  "metrics_enabled": {
-    "type": "boolean",
-    "required": false,
-    "default": false
-  },
-  "metrics_port": {
-    "type": "number",
-    "required": false,
-    "min": 1,
-    "max": 65535,
-    "default": 9090
-  },
-  "redis_url": {
-    "type": "string",
-    "required": false,
-    "pattern": "^redis://.*$"
-  },
-  "cache_ttl": {
-    "type": "number",
-    "required": false,
-    "min": 0,
-    "max": 86400,
-    "default": 3600
-  }
+  "required": ["app_name", "version"]
 } 

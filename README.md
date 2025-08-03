@@ -2,15 +2,12 @@
 
 [![npm version](https://img.shields.io/npm/v/align-config.svg)](https://www.npmjs.com/package/align-config)
 [![npm downloads](https://img.shields.io/npm/dm/align-config.svg)](https://www.npmjs.com/package/align-config)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![Node.js CI](https://img.shields.io/badge/Node.js-CI-brightgreen.svg)](https://github.com/your-username/align-config/actions)
 
 **Align** is a domain-specific configuration language and toolchain that makes application configuration safe, predictable, 
 and unified across environments. Replace scattered `.env`, YAML, JSON, and Kubernetes overrides with a single source of 
 truth: `.align` files.
-
-[![npm version](https://img.shields.io/npm/v/align-config.svg)](https://www.npmjs.com/package/align-config)
-[![npm downloads](https://img.shields.io/npm/dm/align-config.svg)](https://www.npmjs.com/package/align-config)
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
-[![Node.js CI](https://img.shields.io/badge/Node.js-CI-brightgreen.svg)](https://github.com/your-username/align-config/actions)
 
 ## 📋 Table of Contents
 
@@ -26,6 +23,10 @@ truth: `.align` files.
 - [📦 Library-Aware Configuration](#-library-aware-configuration)
 - [🔧 Risk-Aware Repair](#-risk-aware-repair)
 - [🌍 Cross-Language Export](#-cross-language-export)
+- [🏆 Policy Validation](#-policy-validation)
+- [🧠 Schema Inference](#-schema-inference)
+- [🖥️ Interactive CLI](#️-interactive-cli)
+- [🧱 Module-Specific Configuration](#-module-specific-configuration)
 - [📄 License](#-license)
 - [🤝 Contributing](#-contributing)
 - [📞 Support](#-support)
@@ -552,6 +553,475 @@ database_url = postgresql://localhost:5432/myapp_dev
 - `--schema <file>`: Schema file path (align.schema.json)
 - `--k8s-configmap`: Generate Kubernetes ConfigMap YAML
 
+## 🏆 Policy Validation
+
+**Environment-specific guardrails and business rules** - Prevent misconfigurations like `debug = true` in production and encode team policies into your configuration system.
+
+### 🚀 Why Policy Validation Matters
+
+- **🔒 Prevent Production Disasters** - Catch unsafe configs before deployment
+- **📋 Encode Business Rules** - Turn team policies into enforceable rules
+- **🏢 Enterprise Trust** - Add governance and compliance to your configs
+- **⚡ Real-World Validation** - Make `validate` far more powerful and applicable
+
+### 📋 Policy Types
+
+**Allowed Values:**
+```json
+{
+  "production": {
+    "debug": { "allowed": false },
+    "log_level": { "allowed": ["error", "warn"] }
+  }
+}
+```
+
+**Required Values:**
+```json
+{
+  "production": {
+    "ssl": { "required": true },
+    "jwt_secret": { "required": true }
+  }
+}
+```
+
+**Numeric Ranges:**
+```json
+{
+  "production": {
+    "timeout": { "min": 5000 },
+    "max_connections": { "max": 100 }
+  }
+}
+```
+
+**Pattern Matching:**
+```json
+{
+  "production": {
+    "database_url": { "pattern": "^postgresql://.*$" },
+    "jwt_secret": { "pattern": "^.{32,}$" }
+  }
+}
+```
+
+### 🛠️ Usage
+
+**Validate Policies:**
+```bash
+# Validate production config against policies
+align validate-policies --env=prod
+
+# Use custom policy file
+align validate-policies --env=prod --policy-file=./custom.policies.json
+
+# JSON output for CI/CD
+align validate-policies --env=prod --format=json
+```
+
+**Generate Policy Suggestions:**
+```bash
+# Get suggestions for current config
+align suggest-policies --env=prod
+
+# Analyze specific environment
+align suggest-policies --env=staging
+```
+
+### 📄 Policy File Format
+
+Create `align.policies.json` in your project root:
+
+```json
+{
+  "production": {
+    "debug": {
+      "allowed": false,
+      "message": "Debug mode should not be enabled in production"
+    },
+    "log_level": {
+      "allowed": ["error", "warn"],
+      "message": "Production should use error or warn log level"
+    },
+    "ssl": {
+      "required": true,
+      "message": "SSL must be enabled in production"
+    },
+    "timeout": {
+      "min": 5000,
+      "message": "Production timeouts should be at least 5 seconds"
+    }
+  },
+  "staging": {
+    "debug": {
+      "allowed": false,
+      "message": "Debug mode should not be enabled in staging"
+    },
+    "log_level": {
+      "allowed": ["info", "warn"],
+      "message": "Staging should use info or warn log level"
+    }
+  },
+  "development": {
+    "debug": {
+      "allowed": true,
+      "message": "Debug mode is recommended for development"
+    },
+    "log_level": {
+      "allowed": ["debug", "info"],
+      "message": "Development should use debug or info log level"
+    }
+  }
+}
+```
+
+### 🎯 Example Output
+
+**Policy Violations:**
+```
+🔒 Policy Validation for production:
+❌ 3 policy violations found:
+
+1. debug = true
+   Environment: production
+   Rule: allowed_value
+   Message: Debug mode should not be enabled in production
+
+2. log_level = debug
+   Environment: production
+   Rule: allowed_values
+   Message: Production should use error or warn log level
+
+3. ssl = false
+   Environment: production
+   Rule: required
+   Message: SSL must be enabled in production
+```
+
+**Policy Suggestions:**
+```
+💡 Policy Suggestions for production:
+
+1. debug (critical)
+   Rule: allowed
+   Suggested: false
+   Message: Debug mode should be disabled in production
+
+2. log_level (warning)
+   Rule: allowed
+   Suggested: ["error", "warn"]
+   Message: Production should use error or warn log level
+```
+
+### 🔧 Integration
+
+**CI/CD Pipeline:**
+```yaml
+# GitHub Actions
+- name: Validate Policies
+  run: |
+    align validate-policies --env=prod --format=json > policy-results.json
+    if [ $(jq '.valid' policy-results.json) != "true" ]; then
+      echo "Policy violations found!"
+      exit 1
+    fi
+```
+
+**Pre-commit Hook:**
+```bash
+#!/bin/bash
+# .git/hooks/pre-commit
+align validate-policies --env=dev
+if [ $? -ne 0 ]; then
+  echo "Policy violations found. Commit blocked."
+  exit 1
+fi
+```
+
+### 🏆 Benefits
+
+- **🚫 Prevent Misconfigurations** - Catch unsafe settings before deployment
+- **📋 Enforce Team Standards** - Turn policies into code
+- **🔒 Security Compliance** - Ensure SSL, secrets, and security settings
+- **⚡ Performance Guardrails** - Enforce minimum timeouts and limits
+- **🏢 Enterprise Governance** - Add audit trails and compliance checks
+
+## 🧠 Schema Inference
+
+**Make onboarding fast** - Automatically generate schemas from existing `.align` files instead of writing them from scratch.
+
+### 🚀 Why Schema Inference Matters
+
+- **🚀 Faster Onboarding** - Devs can just write a `.align` file and run `align infer` to generate a schema
+- **🔁 Schema Evolution** - Useful in messy environments where schemas were never formally defined
+- **🛠️ Bootstrap Legacy Configs** - Great for converting `.env` or `config.json` into a typed schema
+
+### 🛠️ Usage
+
+**Basic Inference:**
+```bash
+# Infer schema from existing .align files
+align infer --config-dir=./config --out=./align.schema.json
+
+# Using source installation
+node index.js infer --config-dir=./config --out=./align.schema.json
+```
+
+**Advanced Options:**
+```bash
+# Mark all fields as required
+align infer --mark-all-required
+
+# Infer patterns for URLs and emails (default: true)
+align infer --infer-patterns
+
+# Infer min/max ranges for numbers
+align infer --infer-ranges
+
+# Output in YAML format
+align infer --format=yaml
+```
+
+### 🎯 Example
+
+**Input `.align` file:**
+```ini
+service_name = "api"
+timeout = 3000
+auth_required = true
+database_url = "postgresql://localhost:5432/db"
+```
+
+**Generated schema:**
+```json
+{
+  "service_name": {
+    "type": "string",
+    "required": false,
+    "description": "Inferred from service_name",
+    "default": "api"
+  },
+  "timeout": {
+    "type": "number",
+    "required": false,
+    "description": "Inferred from timeout",
+    "default": 3000
+  },
+  "auth_required": {
+    "type": "boolean",
+    "required": false,
+    "description": "Inferred from auth_required",
+    "default": true
+  },
+  "database_url": {
+    "type": "string",
+    "required": false,
+    "description": "Inferred from database_url",
+    "default": "postgresql://localhost:5432/db",
+    "pattern": "^https?://.*$"
+  }
+}
+```
+
+### 🎯 Example Output
+
+**Inference Summary:**
+```
+🧠 Inferring schema from .align files...
+📁 Config directory: ./config
+📄 Output file: ./align.schema.json
+
+✅ Schema inferred and saved to: ./align.schema.json
+
+📊 Inference Summary:
+  Total fields: 38
+  Required fields: 0
+  String fields: 14
+  Number fields: 17
+  Boolean fields: 6
+  Array fields: 1
+  Pattern fields: 4
+
+💡 Next Steps:
+  1. Review the generated schema
+  2. Adjust required fields and validation rules
+  3. Add descriptions and documentation
+  4. Run "align validate" to test the schema
+```
+
+### 🔧 Features
+
+- **Type Inference** - Automatically detects string, number, boolean, and array types
+- **Pattern Detection** - Identifies URLs and email patterns
+- **Range Inference** - Suggests min/max values for numbers
+- **Multi-Environment** - Analyzes base + all environment files
+- **Metadata Tracking** - Includes generation timestamp and options
+- **Flexible Output** - JSON or YAML format
+
+### 🎯 Perfect For
+
+- **🚀 Quick Start** - Get started with Align without writing schemas
+- **🔧 Legacy Migration** - Convert existing configs to typed schemas
+- **📋 Prototype Development** - Rapid iteration with automatic schema generation
+- **🏢 Team Adoption** - Lower barrier to entry for new teams
+
+## 🖥️ Interactive CLI
+
+**Transform your CLI experience** with guided wizards and interactive prompts for better Developer Experience.
+
+### 🚀 Why Interactive CLI Matters
+
+- **🚀 Easier Onboarding** - New users get guided setup instead of manual file editing
+- **🔧 Fewer Errors** - Validation and smart defaults prevent configuration mistakes
+- **📝 Guided Experience** - Step-by-step wizards for complex operations
+- **🔄 Better UX** - Interactive feedback and clear next steps
+
+### 🛠️ Usage
+
+**Interactive Setup Wizard:**
+```bash
+# Start interactive setup
+align setup
+
+# Non-interactive mode (fallback)
+align setup --interactive false --template nodejs-api --app-name myapp
+```
+
+**Interactive Configuration Wizard:**
+```bash
+# Start interactive editor
+align wizard
+
+# Non-interactive mode
+align wizard --interactive false --env dev --key port --value 3000
+```
+
+**Interactive Troubleshoot Wizard:**
+```bash
+# Start interactive diagnosis
+align troubleshoot
+
+# Non-interactive mode
+align troubleshoot --interactive false --config-dir ./config --detailed
+```
+
+### 🎯 Setup Wizard Example
+
+**Interactive Flow:**
+```bash
+$ align setup
+🛠️  Let's create a new Align config!
+
+? What environment are you targeting? (Use arrow keys)
+❯ dev
+  prod
+  staging
+
+? Service name: (web)
+? Port: (3000)
+? Timeout (ms): (3000)
+? Require authentication? (Y/n)
+? Log level: (Use arrow keys)
+❯ info
+  debug
+  warn
+  error
+
+? Database URL (optional):
+? Generate schema automatically? (Y/n)
+
+✅ Configuration created successfully!
+📁 Config directory: ./config
+📄 Base config: ./config/base.align
+📄 Environment config: ./config/dev.align
+📋 Schema: ./config/align.schema.json
+
+💡 Next steps:
+  1. Review and customize the generated config
+  2. Run "align validate" to check your config
+  3. Run "align build" to generate output files
+```
+
+### 🎯 Configuration Wizard Example
+
+**Interactive Flow:**
+```bash
+$ align wizard
+📝 Interactive Configuration Editor
+
+? Which environment to edit? (Use arrow keys)
+❯ dev
+  prod
+  staging
+
+? What would you like to do? (Use arrow keys)
+❯ Edit existing key
+  Add new key
+  Remove key
+  View current config
+
+? Which key to edit? (Use arrow keys)
+❯ port
+  timeout
+  debug
+
+? Value for port: (3000)
+✅ Updated port = 3000 in dev.align
+```
+
+### 🎯 Troubleshoot Wizard Example
+
+**Interactive Flow:**
+```bash
+$ align troubleshoot
+🔍 Interactive Configuration Diagnosis
+
+? What issue are you experiencing? (Use arrow keys)
+❯ All of the above
+  Configuration errors
+  Security warnings
+  Performance issues
+
+? Which environment to analyze? (Use arrow keys)
+❯ dev
+  prod
+  staging
+
+? Show detailed analysis? (Y/n)
+
+🔍 Analyzing configuration...
+
+📊 Analysis Results:
+❌ 2 critical issues found:
+  1. Weak JWT Secret
+  2. Missing required field: database_url
+
+⚠️  1 warnings found:
+  1. Port 3000 is commonly used
+
+💡 Recommendations:
+  1. Security: Generate a strong JWT secret
+  2. Configuration: Add database_url to dev.align
+  3. Best Practice: Consider using a different port
+```
+
+### 🔧 Features
+
+- **🛠️ Setup Wizard** - Guided configuration creation with validation
+- **📝 Configuration Editor** - Interactive key-value editing with smart defaults
+- **🔍 Troubleshoot Wizard** - Focused diagnosis with actionable recommendations
+- **✅ Smart Validation** - Input validation with helpful error messages
+- **🔄 Fallback Support** - Non-interactive mode for automation and CI/CD
+
+### 🎯 Perfect For
+
+- **New Align users** getting started
+- **Quick configuration changes** without manual file editing
+- **Troubleshooting configuration issues** with guided diagnosis
+- **Team onboarding and training** with interactive experience
+- **CI/CD environments** using non-interactive mode
+
 ### Dry Run (Simulate Changes)
 ```bash
 # Using npm installation
@@ -575,10 +1045,28 @@ align explain --key=timeout --env=prod
 node index.js explain --key=timeout --env=prod
 ```
 
-Traces where a configuration value came from:
-- Shows the complete override path
-- Displays file paths for easy reference
-- Great for understanding configuration origins
+**Debug configuration values with step-by-step trace:**
+- Shows complete override path from base to environment
+- Marks active values with ✅ indicator
+- Displays inheritance vs override context
+- Great for debugging configuration issues
+
+#### Example Trace Output
+```bash
+$ align explain --key=port --env=prod
+🔍 Config Trace for key: "port" in env: "prod"
+
+1. base.align         → port = 8000
+2. prod.align      → port = 80 ✅ ACTIVE VALUE
+
+💡 Override detected: Value changed from 8000 to 80
+```
+
+**Perfect for:**
+- **Debugging**: Why is this value what it is?
+- **Auditing**: Track configuration changes
+- **Troubleshooting**: Find accidental overrides
+- **Documentation**: Understand configuration flow
 
 ### Diff (Compare Environments)
 ```bash
@@ -1292,6 +1780,7 @@ $ node index.js diff --env1=dev --env2=prod
 - ✅ **📦 Library-Aware Config** - Package schemas with namespacing
 - ✅ **🔧 Risk-Aware Repair** - Safe automated fixes with rollback
 - ✅ **🌍 Cross-Language Export** - 9+ output formats (Python, TOML, Java, etc.)
+- ✅ **🏆 Policy Validation** - Environment-specific guardrails and business rules
 
 ### Output Formats
 - ✅ **JSON** - Universal format for applications
@@ -1420,3 +1909,88 @@ Thanks to all contributors and the open source community for making this project
 ---
 
 **Align** - Making configuration safe, predictable, and unified across environments. 🚀 
+
+## 🧱 Module-Specific Configuration
+
+**Overview:**
+
+Module-Specific Configuration lets you extract, validate, and export only the configuration keys needed by a specific module or package. This is perfect for microservices, plugin architectures, or any codebase where different parts of the system should only see the config they actually use.
+
+**Why it matters:**
+- 🔒 **Security**: Modules only see what they need (principle of least privilege)
+- 🧹 **Cleaner Code**: No more passing entire config objects around
+- 🛡️ **Validation**: Module-specific schema validation
+- 📦 **Modularity**: Each module declares its own config requirements
+- 🧑‍💻 **Better Debugging**: Clear which config each module uses
+
+**How it works:**
+- Place a schema for each module in `config/modules/<module>/align.schema.json` (or use package schemas)
+- Use the CLI to extract, validate, or list module configs
+
+### 🛠️ Usage
+
+```bash
+# List all modules with schemas
+yarn align list-modules
+
+# Output only the config for a module (JSON, YAML, or ENV)
+yarn align module-config --module auth --env dev --format json
+yarn align module-config --module email --format yaml
+yarn align module-config --module database --format env
+
+# Validate a module's config
+yarn align validate-module --module auth --env dev
+```
+
+### 🎯 Example Scenario
+Suppose you have this config:
+```json
+{
+  "service_name": "user-api",
+  "db_url": "postgres://...",
+  "auth_required": true,
+  "rate_limit": 100,
+  "email_smtp": "smtp://...",
+  "email_from": "noreply@yourapp.com"
+}
+```
+- The **auth** module only needs: `auth_required`, `rate_limit`
+- The **email** module only needs: `email_smtp`, `email_from`
+- The **db** layer only needs: `db_url`
+
+**Extract just what each module needs:**
+```bash
+yarn align module-config --module auth
+# { "auth_required": true, "rate_limit": 100 }
+
+yarn align module-config --module email
+# { "email_smtp": "smtp://...", "email_from": "noreply@yourapp.com" }
+
+yarn align module-config --module database
+# { "db_url": "postgres://..." }
+```
+
+### 🧩 How to define a module schema
+Create a file like `config/modules/auth/align.schema.json`:
+```json
+{
+  "type": "object",
+  "properties": {
+    "auth_required": { "type": "boolean" },
+    "rate_limit": { "type": "number" }
+  },
+  "required": ["auth_required", "rate_limit"]
+}
+```
+
+### 🏆 Benefits
+- **Security**: Only expose what’s needed
+- **Validation**: Each module can have its own schema
+- **Export**: Output in JSON, YAML, or ENV for any module
+- **CI/CD**: Validate module configs in pipelines
+- **Microservices**: Perfect for service isolation
+
+### 💡 Pro Tip
+You can use this for both local modules and package schemas (from `node_modules`).
+
+--- 

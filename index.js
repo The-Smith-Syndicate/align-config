@@ -16,16 +16,28 @@ const {
   exportToProperties,
   exportToHCL,
   exportToINI,
-  exportToXML
+  exportToXML,
+  validatePolicies,
+  loadPolicies,
+  suggestPolicies,
+  inferSchema,
+  inferSchemaFromFiles,
+  diagnoseConfig,
+  // Module-specific configuration functions
+  extractModuleConfig,
+  discoverModuleSchemas,
+  generateModuleConfig,
+  validateModuleConfig
 } = require('./parser');
 const { Command } = require('commander');
 const chalk = require('chalk');
 const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
+const inquirer = require('inquirer');
 
 const program = new Command();
-program.name('align').description('Align config CLI').version('1.0.1');
+program.name('align').description('Align config CLI').version('1.0.2');
 
 // INIT COMMAND
 program
@@ -458,7 +470,7 @@ program
 // EXPLAIN COMMAND
 program
   .command('explain')
-  .description('Trace where a configuration value came from')
+  .description('Debug configuration values with step-by-step trace showing override path')
   .requiredOption('--key <key>', 'Configuration key to trace')
   .requiredOption('--env <environment>', 'Environment name (e.g., dev, prod)')
   .option('--config-dir <dir>', 'Configuration directory', './config')
@@ -539,23 +551,45 @@ program
         console.log('');
       }
 
-      // Trace the origin
+      // Enhanced trace showing step-by-step resolution
+      console.log(chalk.blue(`🔍 Config Trace for key: "${options.key}" in env: "${options.env}"`));
+      console.log('');
+
       const baseValue = baseConfig[options.key];
       const envValue = envConfig[options.key];
 
+      // Step 1: Base config
+      if (baseValue !== undefined) {
+        console.log(chalk.gray(`1. base.align         → ${options.key} = ${JSON.stringify(baseValue)}`));
+      } else {
+        console.log(chalk.gray(`1. base.align         → (not defined)`));
+      }
+
+      // Step 2: Environment config
+      if (envValue !== undefined) {
+        if (baseValue !== undefined) {
+          console.log(chalk.gray(`2. ${options.env}.align      → ${options.key} = ${JSON.stringify(envValue)} ✅ ACTIVE VALUE`));
+        } else {
+          console.log(chalk.gray(`2. ${options.env}.align      → ${options.key} = ${JSON.stringify(envValue)} ✅ ACTIVE VALUE`));
+        }
+      } else {
+        if (baseValue !== undefined) {
+          console.log(chalk.gray(`2. ${options.env}.align      → (no override)`));
+          console.log(chalk.gray(`   → ${options.key} = ${JSON.stringify(baseValue)} ✅ ACTIVE VALUE`));
+        } else {
+          console.log(chalk.gray(`2. ${options.env}.align      → (not defined)`));
+        }
+      }
+
+      console.log('');
+      
+      // Additional context
       if (baseValue !== undefined && envValue !== undefined) {
-        // Overridden from base
-        console.log(chalk.yellow(`🧱 Defined in: base.align = ${JSON.stringify(baseValue)}`));
-        console.log(chalk.blue(`♻️  Overridden by: ${options.env}.align = ${JSON.stringify(envValue)}`));
-        console.log(chalk.gray(`📁 File: ${envPath}`));
-      } else if (baseValue !== undefined) {
-        // Only in base
-        console.log(chalk.green(`🧱 Defined in: base.align = ${JSON.stringify(baseValue)}`));
-        console.log(chalk.gray(`📁 File: ${basePath}`));
-      } else if (envValue !== undefined) {
-        // Only in environment
-        console.log(chalk.blue(`➕ Added in: ${options.env}.align = ${JSON.stringify(envValue)}`));
-        console.log(chalk.gray(`📁 File: ${envPath}`));
+        console.log(chalk.yellow(`💡 Override detected: Value changed from ${JSON.stringify(baseValue)} to ${JSON.stringify(envValue)}`));
+      } else if (baseValue !== undefined && envValue === undefined) {
+        console.log(chalk.green(`💡 Inherited: Value from base.align is being used`));
+      } else if (baseValue === undefined && envValue !== undefined) {
+        console.log(chalk.blue(`💡 Environment-specific: Value only defined in ${options.env}.align`));
       }
 
     } catch (err) {
@@ -1191,6 +1225,849 @@ program
 
     } catch (err) {
       console.error(chalk.red('❌ Schema listing error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// POLICY VALIDATION COMMANDS
+program
+  .command('validate-policies')
+  .description('Validate configuration against environment policies and guardrails')
+  .option('--env <environment>', 'Environment to validate (e.g., dev, prod, staging)')
+  .option('--config-dir <dir>', 'Configuration directory (default: "./config")')
+  .option('--policy-file <file>', 'Custom policy file path (default: "./align.policies.json")')
+  .option('--format <format>', 'Output format (text, json) (default: "text")')
+  .action(async (options) => {
+    try {
+      const environment = options.env || 'production';
+      const configDir = path.resolve(options.configDir || './config');
+      const policyFile = options.policyFile || './align.policies.json';
+      
+      // Load configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), true);
+      const envConfig = await loadConfig(path.join(configDir, `${environment}.align`));
+      const config = mergeConfigs(baseConfig, envConfig);
+      
+      // Load policies
+      const customPolicies = loadPolicies(policyFile);
+      
+      // Validate policies
+      const result = validatePolicies(config, environment, customPolicies);
+      
+      if (options.format === 'json') {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(chalk.blue(`🔒 Policy Validation for ${environment}:`));
+        
+        if (result.valid) {
+          console.log(chalk.green('✅ All policies passed!'));
+          console.log(chalk.gray(`Applied ${result.policiesApplied.length} policies`));
+        } else {
+          console.log(chalk.red(`❌ ${result.violations.length} policy violations found:`));
+          result.violations.forEach((violation, index) => {
+            console.log(chalk.red(`\n${index + 1}. ${violation.key} = ${violation.value}`));
+            console.log(chalk.gray(`   Environment: ${violation.environment}`));
+            console.log(chalk.gray(`   Rule: ${violation.rule}`));
+            console.log(chalk.gray(`   Message: ${violation.message}`));
+          });
+        }
+      }
+    } catch (error) {
+      console.error(chalk.red('❌ Error validating policies:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('suggest-policies')
+  .description('Generate policy suggestions based on current configuration')
+  .option('--env <environment>', 'Environment to analyze (e.g., dev, prod, staging)')
+  .option('--config-dir <dir>', 'Configuration directory (default: "./config")')
+  .option('--format <format>', 'Output format (text, json) (default: "text")')
+  .action(async (options) => {
+    try {
+      const environment = options.env || 'production';
+      const configDir = path.resolve(options.configDir || './config');
+      
+      // Load configuration
+      const baseConfig = await loadConfig(path.join(configDir, 'base.align'), true);
+      const envConfig = await loadConfig(path.join(configDir, `${environment}.align`));
+      const config = mergeConfigs(baseConfig, envConfig);
+      
+      // Generate suggestions
+      const suggestions = suggestPolicies(config, environment);
+      
+      if (options.format === 'json') {
+        console.log(JSON.stringify(suggestions, null, 2));
+      } else {
+        console.log(chalk.blue(`💡 Policy Suggestions for ${environment}:`));
+        
+        if (suggestions.length === 0) {
+          console.log(chalk.green('✅ No policy suggestions needed!'));
+        } else {
+          suggestions.forEach((suggestion, index) => {
+            const severityColor = suggestion.severity === 'critical' ? chalk.red : chalk.yellow;
+            console.log(severityColor(`\n${index + 1}. ${suggestion.key} (${suggestion.severity})`));
+            console.log(chalk.gray(`   Rule: ${suggestion.rule}`));
+            console.log(chalk.gray(`   Suggested: ${JSON.stringify(suggestion.value)}`));
+            console.log(chalk.gray(`   Message: ${suggestion.message}`));
+          });
+        }
+      }
+    } catch (error) {
+      console.error(chalk.red('❌ Error generating policy suggestions:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// SCHEMA INFERENCE COMMAND
+program
+  .command('infer')
+  .description('Infer schema from existing .align configuration files')
+  .option('--config-dir <dir>', 'Configuration directory (default: "./config")')
+  .option('--out <file>', 'Output schema file (default: "./align.schema.json")')
+  .option('--mark-all-required', 'Mark all fields as required (default: false)')
+  .option('--infer-patterns', 'Infer patterns for URLs and emails (default: true)')
+  .option('--infer-ranges', 'Infer min/max ranges for numbers (default: false)')
+  .option('--format <format>', 'Output format (json, yaml) (default: "json")')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir || './config');
+      const outputFile = options.out || './align.schema.json';
+      
+      console.log(chalk.blue('🧠 Inferring schema from .align files...'));
+      console.log(chalk.gray(`📁 Config directory: ${configDir}`));
+      console.log(chalk.gray(`📄 Output file: ${outputFile}`));
+      console.log('');
+      
+      // Load base config
+      const basePath = path.join(configDir, 'base.align');
+      if (!fs.existsSync(basePath)) {
+        console.error(chalk.red(`❌ Base config not found: ${basePath}`));
+        process.exit(1);
+      }
+      
+      const baseContent = fs.readFileSync(basePath, 'utf-8');
+      const baseConfig = parseAlign(baseContent);
+      
+      // Load environment configs
+      const envConfigs = {};
+      const envFiles = fs.readdirSync(configDir).filter(file => 
+        file.endsWith('.align') && file !== 'base.align'
+      );
+      
+      for (const file of envFiles) {
+        const envName = file.replace('.align', '');
+        const envPath = path.join(configDir, file);
+        const envContent = fs.readFileSync(envPath, 'utf-8');
+        envConfigs[envName] = parseAlign(envContent);
+      }
+      
+      // Infer schema
+      const inferenceOptions = {
+        markAllRequired: options.markAllRequired || false,
+        inferPatterns: options.inferPatterns !== false, // Default to true
+        inferRanges: options.inferRanges || false
+      };
+      
+      const schema = inferSchemaFromFiles(baseConfig, envConfigs, inferenceOptions);
+      
+      // Write output
+      if (options.format === 'yaml') {
+        const yaml = require('js-yaml');
+        const yamlContent = yaml.dump(schema);
+        fs.writeFileSync(outputFile.replace('.json', '.yaml'), yamlContent);
+        console.log(chalk.green(`✅ Schema inferred and saved to: ${outputFile.replace('.json', '.yaml')}`));
+      } else {
+        fs.writeFileSync(outputFile, JSON.stringify(schema, null, 2));
+        console.log(chalk.green(`✅ Schema inferred and saved to: ${outputFile}`));
+      }
+      
+      console.log('');
+      console.log(chalk.blue('📊 Inference Summary:'));
+      console.log(chalk.gray(`  Total fields: ${Object.keys(schema).filter(k => !k.startsWith('_')).length}`));
+      console.log(chalk.gray(`  Required fields: ${Object.values(schema).filter(f => f.required && !f.key?.startsWith('_')).length}`));
+      console.log(chalk.gray(`  String fields: ${Object.values(schema).filter(f => f.type === 'string').length}`));
+      console.log(chalk.gray(`  Number fields: ${Object.values(schema).filter(f => f.type === 'number').length}`));
+      console.log(chalk.gray(`  Boolean fields: ${Object.values(schema).filter(f => f.type === 'boolean').length}`));
+      console.log(chalk.gray(`  Array fields: ${Object.values(schema).filter(f => f.type === 'array').length}`));
+      
+      if (inferenceOptions.inferPatterns) {
+        const patternFields = Object.values(schema).filter(f => f.pattern).length;
+        if (patternFields > 0) {
+          console.log(chalk.gray(`  Pattern fields: ${patternFields}`));
+        }
+      }
+      
+      console.log('');
+      console.log(chalk.blue('💡 Next Steps:'));
+      console.log(chalk.gray('  1. Review the generated schema'));
+      console.log(chalk.gray('  2. Adjust required fields and validation rules'));
+      console.log(chalk.gray('  3. Add descriptions and documentation'));
+      console.log(chalk.gray('  4. Run "align validate" to test the schema'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error inferring schema:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// INTERACTIVE COMMANDS
+program
+  .command('setup')
+  .description('Interactive Align configuration setup')
+  .option('--interactive <mode>', 'Use interactive mode (true/false, default: true)')
+  .option('--template <template>', 'Template to use (when not interactive)')
+  .option('--app-name <name>', 'Application name (when not interactive)')
+  .action(async (options) => {
+    try {
+      if (options.interactive === 'false' || options.interactive === false) {
+        // Fall back to template-based init
+        const template = options.template || 'nodejs-api';
+        const appName = options.appName || 'myapp';
+        
+        console.log(chalk.blue('🚀 Initializing Align configuration...'));
+        console.log(chalk.gray(`Template: ${template}`));
+        console.log(chalk.gray(`App name: ${appName}`));
+        
+        // Use existing template logic
+        const templateDir = path.join(__dirname, 'templates', template);
+        if (!fs.existsSync(templateDir)) {
+          console.error(chalk.red(`❌ Template not found: ${template}`));
+          process.exit(1);
+        }
+        
+        // Copy template files
+        const configDir = './config';
+        if (!fs.existsSync(configDir)) {
+          fs.mkdirSync(configDir, { recursive: true });
+        }
+        
+        // Copy template files to config directory
+        const templateFiles = fs.readdirSync(templateDir);
+        for (const file of templateFiles) {
+          const sourcePath = path.join(templateDir, file);
+          const destPath = path.join(configDir, file);
+          
+          if (fs.statSync(sourcePath).isFile()) {
+            let content = fs.readFileSync(sourcePath, 'utf8');
+            content = content.replace(/myapp/g, appName);
+            fs.writeFileSync(destPath, content);
+          }
+        }
+        
+        console.log(chalk.green('✅ Configuration initialized!'));
+        console.log(chalk.gray(`📁 Config directory: ${configDir}`));
+      } else {
+        await interactiveInit();
+      }
+    } catch (error) {
+      console.error(chalk.red('❌ Error during initialization:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('wizard')
+  .description('Interactive configuration wizard')
+  .option('--interactive <mode>', 'Use interactive mode (true/false, default: true)')
+  .option('--env <environment>', 'Environment to edit (when not interactive)')
+  .option('--key <key>', 'Key to edit (when not interactive)')
+  .option('--value <value>', 'New value (when not interactive)')
+  .action(async (options) => {
+    try {
+      if (options.interactive === 'false' || options.interactive === false) {
+        // Fall back to command-line edit
+        const env = options.env || 'dev';
+        const key = options.key;
+        const value = options.value;
+        
+        if (!key || value === undefined) {
+          console.error(chalk.red('❌ --key and --value are required in non-interactive mode'));
+          process.exit(1);
+        }
+        
+        // Use existing edit logic
+        const configPath = path.join('./config', `${env}.align`);
+        if (!fs.existsSync(configPath)) {
+          console.error(chalk.red(`❌ Config file not found: ${configPath}`));
+          process.exit(1);
+        }
+        
+        let content = fs.readFileSync(configPath, 'utf8');
+        const lines = content.split('\n');
+        let updated = false;
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (line.trim().startsWith(`${key} =`)) {
+            lines[i] = `${key} = ${JSON.stringify(value)}`;
+            updated = true;
+            break;
+          }
+        }
+        
+        if (!updated) {
+          lines.push(`${key} = ${JSON.stringify(value)}`);
+        }
+        
+        fs.writeFileSync(configPath, lines.join('\n'));
+        console.log(chalk.green(`✅ Updated ${key} = ${JSON.stringify(value)} in ${env}.align`));
+      } else {
+        await interactiveEdit();
+      }
+    } catch (error) {
+      console.error(chalk.red('❌ Error during edit:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('troubleshoot')
+  .description('Interactive configuration diagnosis wizard')
+  .option('--interactive <mode>', 'Use interactive mode (true/false, default: true)')
+  .option('--config-dir <dir>', 'Configuration directory (default: "./config")')
+  .option('--detailed', 'Show detailed analysis')
+  .action(async (options) => {
+    try {
+      if (options.interactive === 'false' || options.interactive === false) {
+        // Fall back to command-line diagnose
+        const configDir = path.resolve(options.configDir || './config');
+        const detailed = options.detailed || false;
+        
+        console.log(chalk.blue('🔍 Diagnosing configuration...'));
+        const diagnosis = await diagnoseConfig('.', configDir, detailed);
+        displayDiagnosisResults(diagnosis, true);
+      } else {
+        await interactiveDiagnose(options);
+      }
+    } catch (error) {
+      console.error(chalk.red('❌ Error during diagnosis:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Interactive functions
+async function interactiveInit() {
+  console.log(chalk.blue('🛠️  Let\'s create a new Align config!'));
+  console.log('');
+  
+  const responses = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'environment',
+      message: 'What environment are you targeting?',
+      choices: ['dev', 'prod', 'staging'],
+      default: 'dev'
+    },
+    {
+      type: 'input',
+      name: 'service_name',
+      message: 'Service name:',
+      default: 'web',
+      validate: (input) => {
+        if (input.trim().length === 0) {
+          return 'Service name cannot be empty';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'port',
+      message: 'Port:',
+      default: 3000,
+      validate: (input) => {
+        if (input < 1 || input > 65535) {
+          return 'Port must be between 1 and 65535';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'timeout',
+      message: 'Timeout (ms):',
+      default: 3000,
+      validate: (input) => {
+        if (input < 100) {
+          return 'Timeout must be at least 100ms';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'confirm',
+      name: 'auth_required',
+      message: 'Require authentication?',
+      default: true
+    },
+    {
+      type: 'list',
+      name: 'log_level',
+      message: 'Log level:',
+      choices: ['debug', 'info', 'warn', 'error'],
+      default: 'info'
+    },
+    {
+      type: 'input',
+      name: 'database_url',
+      message: 'Database URL (optional):',
+      default: '',
+      filter: (input) => input.trim() || undefined
+    },
+    {
+      type: 'confirm',
+      name: 'generate_schema',
+      message: 'Generate schema automatically?',
+      default: true
+    }
+  ]);
+  
+  // Create config directory
+  const configDir = './config';
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true });
+  }
+  
+  // Generate base config
+  const baseConfig = {
+    service_name: responses.service_name,
+    port: responses.port,
+    timeout: responses.timeout,
+    auth_required: responses.auth_required,
+    log_level: responses.log_level
+  };
+  
+  if (responses.database_url) {
+    baseConfig.database_url = responses.database_url;
+  }
+  
+  // Generate environment-specific config
+  const envConfig = {
+    // Environment-specific overrides can be added here
+  };
+  
+  // Write base config
+  const baseContent = generateAlignContent(baseConfig);
+  fs.writeFileSync(path.join(configDir, 'base.align'), baseContent);
+  
+  // Write environment config
+  const envContent = generateAlignContent(envConfig);
+  fs.writeFileSync(path.join(configDir, `${responses.environment}.align`), envContent);
+  
+  // Generate schema if requested
+  if (responses.generate_schema) {
+    const schema = inferSchema(baseConfig, { inferPatterns: true });
+    fs.writeFileSync(path.join(configDir, 'align.schema.json'), JSON.stringify(schema, null, 2));
+  }
+  
+  console.log('');
+  console.log(chalk.green('✅ Configuration created successfully!'));
+  console.log(chalk.gray(`📁 Config directory: ${configDir}`));
+  console.log(chalk.gray(`📄 Base config: ${configDir}/base.align`));
+  console.log(chalk.gray(`📄 Environment config: ${configDir}/${responses.environment}.align`));
+  if (responses.generate_schema) {
+    console.log(chalk.gray(`📋 Schema: ${configDir}/align.schema.json`));
+  }
+  console.log('');
+  console.log(chalk.blue('💡 Next steps:'));
+  console.log(chalk.gray('  1. Review and customize the generated config'));
+  console.log(chalk.gray('  2. Run "align validate" to check your config'));
+  console.log(chalk.gray('  3. Run "align build" to generate output files'));
+}
+
+async function interactiveEdit() {
+  console.log(chalk.blue('📝 Interactive Configuration Editor'));
+  console.log('');
+  
+  // Check if config exists
+  const configDir = './config';
+  if (!fs.existsSync(configDir)) {
+    console.log(chalk.red('❌ No configuration found. Run "align init" first.'));
+    return;
+  }
+  
+  // Get available environments
+  const envFiles = fs.readdirSync(configDir).filter(file => 
+    file.endsWith('.align') && file !== 'base.align'
+  );
+  
+  if (envFiles.length === 0) {
+    console.log(chalk.red('❌ No environment configs found. Run "align init" first.'));
+    return;
+  }
+  
+  const responses = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'environment',
+      message: 'Which environment to edit?',
+      choices: envFiles.map(file => file.replace('.align', '')),
+      default: envFiles[0].replace('.align', '')
+    },
+    {
+      type: 'list',
+      name: 'action',
+      message: 'What would you like to do?',
+      choices: [
+        { name: 'Edit existing key', value: 'edit' },
+        { name: 'Add new key', value: 'add' },
+        { name: 'Remove key', value: 'remove' },
+        { name: 'View current config', value: 'view' }
+      ],
+      default: 'edit'
+    }
+  ]);
+  
+  const envPath = path.join(configDir, `${responses.environment}.align`);
+  let content = '';
+  
+  if (fs.existsSync(envPath)) {
+    content = fs.readFileSync(envPath, 'utf8');
+  }
+  
+  const config = parseAlign(content);
+  
+  if (responses.action === 'view') {
+    console.log('');
+    console.log(chalk.blue(`📋 Current ${responses.environment} configuration:`));
+    Object.entries(config).forEach(([key, value]) => {
+      console.log(chalk.gray(`  ${key} = ${JSON.stringify(value)}`));
+    });
+    return;
+  }
+  
+  if (responses.action === 'edit' || responses.action === 'add') {
+    const keyResponse = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'key',
+        message: responses.action === 'edit' ? 'Which key to edit?' : 'New key name:',
+        validate: (input) => {
+          if (input.trim().length === 0) {
+            return 'Key name cannot be empty';
+          }
+          return true;
+        }
+      }
+    ]);
+    
+    const valueResponse = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'value',
+        message: `Value for ${keyResponse.key}:`,
+        default: config[keyResponse.key] || '',
+        validate: (input) => {
+          if (input.trim().length === 0) {
+            return 'Value cannot be empty';
+          }
+          return true;
+        }
+      }
+    ]);
+    
+    // Update config
+    const lines = content.split('\n');
+    let updated = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.trim().startsWith(`${keyResponse.key} =`)) {
+        lines[i] = `${keyResponse.key} = ${JSON.stringify(valueResponse.value)}`;
+        updated = true;
+        break;
+      }
+    }
+    
+    if (!updated) {
+      lines.push(`${keyResponse.key} = ${JSON.stringify(valueResponse.value)}`);
+    }
+    
+    fs.writeFileSync(envPath, lines.join('\n'));
+    console.log(chalk.green(`✅ Updated ${keyResponse.key} = ${JSON.stringify(valueResponse.value)} in ${responses.environment}.align`));
+  }
+  
+  if (responses.action === 'remove') {
+    const keyResponse = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'key',
+        message: 'Which key to remove?',
+        choices: Object.keys(config),
+        default: Object.keys(config)[0]
+      }
+    ]);
+    
+    const lines = content.split('\n');
+    const filteredLines = lines.filter(line => !line.trim().startsWith(`${keyResponse.key} =`));
+    
+    fs.writeFileSync(envPath, filteredLines.join('\n'));
+    console.log(chalk.green(`✅ Removed ${keyResponse.key} from ${responses.environment}.align`));
+  }
+}
+
+async function interactiveDiagnose(options) {
+  console.log(chalk.blue('🔍 Interactive Configuration Diagnosis'));
+  console.log('');
+  
+  const responses = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'issue_type',
+      message: 'What issue are you experiencing?',
+      choices: [
+        { name: 'Configuration errors', value: 'config' },
+        { name: 'Security warnings', value: 'security' },
+        { name: 'Performance issues', value: 'performance' },
+        { name: 'All of the above', value: 'all' }
+      ],
+      default: 'all'
+    },
+    {
+      type: 'list',
+      name: 'environment',
+      message: 'Which environment to analyze?',
+      choices: ['dev', 'prod', 'staging'],
+      default: 'dev'
+    },
+    {
+      type: 'confirm',
+      name: 'detailed',
+      message: 'Show detailed analysis?',
+      default: true
+    }
+  ]);
+  
+  const configDir = path.resolve(options.configDir || './config');
+  
+  console.log('');
+  console.log(chalk.blue('🔍 Analyzing configuration...'));
+  
+  const diagnosis = await diagnoseConfig('.', configDir, responses.detailed);
+  
+  console.log('');
+  console.log(chalk.blue('📊 Analysis Results:'));
+  
+  if (diagnosis.criticalIssues.length > 0) {
+    console.log(chalk.red(`❌ ${diagnosis.criticalIssues.length} critical issues found:`));
+    diagnosis.criticalIssues.forEach((issue, index) => {
+      console.log(chalk.red(`  ${index + 1}. ${issue.title}`));
+    });
+  }
+  
+  if (diagnosis.warnings.length > 0) {
+    console.log(chalk.yellow(`⚠️  ${diagnosis.warnings.length} warnings found:`));
+    diagnosis.warnings.forEach((warning, index) => {
+      console.log(chalk.yellow(`  ${index + 1}. ${warning.title}`));
+    });
+  }
+  
+  if (diagnosis.criticalIssues.length === 0 && diagnosis.warnings.length === 0) {
+    console.log(chalk.green('✅ No issues found! Your configuration looks good.'));
+  }
+  
+  console.log('');
+  console.log(chalk.blue('💡 Recommendations:'));
+  diagnosis.recommendations.forEach((rec, index) => {
+    console.log(chalk.gray(`  ${index + 1}. ${rec.title}: ${rec.description}`));
+  });
+}
+
+// Helper function to generate .align content
+function generateAlignContent(config) {
+  const lines = [];
+  lines.push('# Generated by Align Interactive CLI');
+  lines.push('');
+  
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === 'string') {
+      lines.push(`${key} = "${value}"`);
+    } else {
+      lines.push(`${key} = ${JSON.stringify(value)}`);
+    }
+  }
+  
+  return lines.join('\n');
+}
+
+// MODULE-SPECIFIC CONFIGURATION COMMANDS
+program
+  .command('module-config')
+  .description('Generate module-specific configuration')
+  .requiredOption('--module <name>', 'Module name')
+  .option('--env <environment>', 'Environment (default: dev)', 'dev')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .option('--format <format>', 'Output format (json, yaml, env)', 'json')
+  .option('--out <file>', 'Output file (default: stdout)')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const baseConfigPath = path.join(configDir, 'base.align');
+      const envConfigPath = path.join(configDir, `${options.env}.align`);
+      
+      // Load configurations
+      let baseConfig = {};
+      let envConfig = {};
+      
+      if (fs.existsSync(baseConfigPath)) {
+        const baseContent = fs.readFileSync(baseConfigPath, 'utf8');
+        baseConfig = parseAlign(baseContent);
+      }
+      
+      if (fs.existsSync(envConfigPath)) {
+        const envContent = fs.readFileSync(envConfigPath, 'utf8');
+        envConfig = parseAlign(envContent);
+      }
+      
+      // Merge configurations
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+      
+      // Generate module-specific config
+      const result = generateModuleConfig(mergedConfig, options.module, options.env, configDir);
+      
+      if (result.errors.length > 0) {
+        console.error(chalk.red('❌ Module configuration errors:'));
+        result.errors.forEach(error => console.error(chalk.red(`  - ${error}`)));
+        process.exit(1);
+      }
+      
+      // Format output
+      let output;
+      switch (options.format.toLowerCase()) {
+        case 'json':
+          output = JSON.stringify(result.config, null, 2);
+          break;
+        case 'yaml':
+          output = yaml.dump(result.config);
+          break;
+        case 'env':
+          output = Object.entries(result.config)
+            .map(([key, value]) => `${key.toUpperCase()}=${JSON.stringify(value)}`)
+            .join('\n');
+          break;
+        default:
+          output = JSON.stringify(result.config, null, 2);
+      }
+      
+      // Output result
+      if (options.out) {
+        fs.writeFileSync(options.out, output);
+        console.log(chalk.green(`✅ Module config saved to: ${options.out}`));
+      } else {
+        console.log(output);
+      }
+      
+      // Show warnings if any
+      if (result.missing.length > 0) {
+        console.log(chalk.yellow(`⚠️  Missing optional fields: ${result.missing.join(', ')}`));
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error generating module config:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('list-modules')
+  .description('List all available modules')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .option('--format <format>', 'Output format (table, json)', 'table')
+  .action(async (options) => {
+    try {
+      const modules = discoverModuleSchemas(options.configDir);
+      
+      if (modules.length === 0) {
+        console.log(chalk.yellow('⚠️  No modules found'));
+        console.log(chalk.gray('Create modules in config/modules/ or install packages with align.schema.json'));
+        return;
+      }
+      
+      if (options.format === 'json') {
+        console.log(JSON.stringify(modules.map(m => ({
+          name: m.name,
+          path: m.path,
+          isPackage: m.isPackage || false,
+          properties: Object.keys(m.schema.properties || {})
+        })), null, 2));
+      } else {
+        console.log(chalk.blue('📦 Available Modules:'));
+        console.log('');
+        
+        modules.forEach(module => {
+          const type = module.isPackage ? '📦 Package' : '📁 Local';
+          const properties = Object.keys(module.schema.properties || {}).join(', ');
+          console.log(chalk.gray(`${type} ${module.name}`));
+          console.log(chalk.gray(`  Path: ${module.path}`));
+          console.log(chalk.gray(`  Properties: ${properties}`));
+          console.log('');
+        });
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error listing modules:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('validate-module')
+  .description('Validate module-specific configuration')
+  .requiredOption('--module <name>', 'Module name')
+  .option('--env <environment>', 'Environment (default: dev)', 'dev')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .option('--detailed', 'Show detailed validation results')
+  .action(async (options) => {
+    try {
+      const configDir = path.resolve(options.configDir);
+      const baseConfigPath = path.join(configDir, 'base.align');
+      const envConfigPath = path.join(configDir, `${options.env}.align`);
+      
+      // Load configurations
+      let baseConfig = {};
+      let envConfig = {};
+      
+      if (fs.existsSync(baseConfigPath)) {
+        const baseContent = fs.readFileSync(baseConfigPath, 'utf8');
+        baseConfig = parseAlign(baseContent);
+      }
+      
+      if (fs.existsSync(envConfigPath)) {
+        const envContent = fs.readFileSync(envConfigPath, 'utf8');
+        envConfig = parseAlign(envContent);
+      }
+      
+      // Merge configurations
+      const mergedConfig = mergeConfigs(baseConfig, envConfig);
+      
+      // Validate module config
+      const result = validateModuleConfig(mergedConfig, options.module, options.env, configDir);
+      
+      console.log(chalk.blue(`🔍 Validating module: ${options.module} (${options.env})`));
+      console.log('');
+      
+      if (result.valid) {
+        console.log(chalk.green('✅ Module configuration is valid'));
+      } else {
+        console.log(chalk.red('❌ Module configuration has errors:'));
+        result.errors.forEach(error => console.log(chalk.red(`  - ${error}`)));
+      }
+      
+      if (result.warnings.length > 0) {
+        console.log(chalk.yellow('⚠️  Warnings:'));
+        result.warnings.forEach(warning => console.log(chalk.yellow(`  - ${warning}`)));
+      }
+      
+      if (options.detailed) {
+        console.log('');
+        console.log(chalk.blue('📋 Module Configuration:'));
+        console.log(JSON.stringify(result.config, null, 2));
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error validating module:'), error.message);
       process.exit(1);
     }
   });
