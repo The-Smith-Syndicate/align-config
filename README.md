@@ -3,11 +3,13 @@
 [![npm version](https://img.shields.io/npm/v/align-config.svg)](https://www.npmjs.com/package/align-config)
 [![npm downloads](https://img.shields.io/npm/dm/align-config.svg)](https://www.npmjs.com/package/align-config)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
-[![Node.js CI](https://img.shields.io/badge/Node.js-CI-brightgreen.svg)](https://github.com/your-username/align-config/actions)
+[![Node.js CI](https://img.shields.io/badge/Node.js-CI-brightgreen.svg)](https://github.com/thesmithsyndicate/align-config/actions)
 
 **Align** is a domain-specific configuration language and toolchain that makes application configuration safe, predictable, 
 and unified across environments. Replace scattered `.env`, YAML, JSON, and Kubernetes overrides with a single source of 
 truth: `.align` files.
+
+**📦 [Available on npm](https://www.npmjs.com/package/align-config) • 🏷️ Version 1.0.2**
 
 ## 📋 Table of Contents
 
@@ -427,33 +429,6 @@ Validates a `.align` file for:
 - Syntax errors
 
 **Note**: Use `--base` flag only for base configuration files that should contain required fields like `service_name`.
-
-### Lint Configuration
-```bash
-# Using npm installation
-align lint --env=dev
-align lint --env=prod --strict
-align lint --env=dev --fix
-
-# Using source installation
-node index.js lint --env=dev
-node index.js lint --env=prod --strict
-node index.js lint --env=dev --fix
-```
-
-Lints configuration for best practices, unused fields, and potential issues:
-- **Detect unused fields** - Find configuration keys not defined in schema
-- **Warn on overly permissive patterns** - Identify insecure regex patterns
-- **Highlight conflicting defaults** - Find mismatches between config and schema defaults
-- **Suggest best practices** - Security, performance, and configuration recommendations
-
-#### Options
-- `--env <environment>`: Environment to lint (dev, prod, staging) (default: dev)
-- `--config-dir <dir>`: Configuration directory (default: ./config)
-- `--schema <file>`: Schema file path (align.schema.json)
-- `--format <format>`: Output format (text, json) (default: text)
-- `--strict`: Treat warnings as errors
-- `--fix`: Automatically fix fixable issues
 
 ### Build Configuration
 ```bash
@@ -2683,9 +2658,9 @@ npm test
 
 ## 📞 Support
 
-- **🐛 Issues**: Report bugs on [GitHub Issues](https://github.com/your-username/align-config/issues)
+- **🐛 Issues**: Report bugs on [GitHub Issues](https://github.com/thesmithsyndicate/align-config/issues)
 - **📚 Documentation**: Check the README and [examples](./examples/) directory
-- **💬 Questions**: Open a [GitHub Discussion](https://github.com/your-username/align-config/discussions)
+- **💬 Questions**: Open a [GitHub Discussion](https://github.com/thesmithsyndicate/align-config/discussions)
 - **📧 Email**: For private support, contact [your-email@example.com]
 
 ## 🏆 Acknowledgments
@@ -2770,7 +2745,7 @@ Create a file like `config/modules/auth/align.schema.json`:
 ```
 
 ### 🏆 Benefits
-- **Security**: Only expose what’s needed
+- **Security**: Only expose what's needed
 - **Validation**: Each module can have its own schema
 - **Export**: Output in JSON, YAML, or ENV for any module
 - **CI/CD**: Validate module configs in pipelines
