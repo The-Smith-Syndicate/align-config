@@ -7,9 +7,9 @@
 
 **Align** is a domain-specific configuration language and toolchain that makes application configuration safe, predictable, 
 and unified across environments. Replace scattered `.env`, YAML, JSON, and Kubernetes overrides with a single source of 
-truth: `.align` files.
+truth: `.align` files. **Perfect for Angular apps, AWS Lambda, and enterprise CI/CD pipelines.**
 
-**📦 [Available on npm](https://www.npmjs.com/package/align-config) • 🏷️ Version 1.0.4**
+**📦 [Available on npm](https://www.npmjs.com/package/align-config) • 🏷️ Version 1.0.5**
 
 ## 📋 Table of Contents
 
@@ -56,6 +56,25 @@ align analyze --config-dir=./config --env=dev
 
 **That's it!** You now have a working configuration system. 🎉
 
+### 🏢 **Enterprise Integration:**
+
+**Perfect for Angular + AWS Lambda setups:**
+
+```bash
+# Migrate from existing .env files
+align migrate-from-env --env-files=config/.env.stage,config/.env.prod
+
+# Generate from Angular environment.ts
+align infer-from-angular --src=src/environment.ts
+
+# Build Docker-compatible .env files
+align build --env=prod --format=env --out=.env
+
+# Replace CI/CD commands
+# Instead of: cp config/.env.prod .env
+# Use: align build --env=prod --format=env --out=.env
+```
+
 ## 🎯 What Problem Does Align Solve?
 
 ### ❌ The Problem with .env Files:
@@ -72,6 +91,23 @@ align analyze --config-dir=./config --env=dev
 - **Security analysis** - find weak secrets, missing SSL, etc.
 - **Performance insights** - identify caching, timeout, and optimization issues
 - **Single source of truth** - all configs in one organized system
+
+## 🏢 **Enterprise Features**
+
+### **Angular + AWS Lambda Integration:**
+- ✅ **Exact .env format compatibility** - Works with existing Docker builds
+- ✅ **Boolean type support** - `ENABLE_SIGNUP=true` converts properly
+- ✅ **Multi-environment support** - `dev-alpha`, `dev-bravo`, `qa`, `prod`
+- ✅ **CI/CD integration** - One-line replacement for file copying
+- ✅ **Angular environment migration** - Import from `src/environment.ts`
+- ✅ **Backward compatibility** - Gradual migration without breaking changes
+
+### **SOC2 Compliance Benefits:**
+- ✅ **Secret detection & masking** - Never expose sensitive data
+- ✅ **Policy enforcement** - Ensure security requirements
+- ✅ **Configuration validation** - Prevent misconfigurations
+- ✅ **Audit trail** - Track all configuration changes
+- ✅ **Environment separation** - Prevent dev configs in production
 
 ## 🎯 How Align Works
 
@@ -516,6 +552,55 @@ database_url: "postgresql://localhost:5432/myapp_dev"
 ```
 
 **Note:** Standard JSON doesn't support comments. Use `--format=jsonc` for JSON with comments, or `--format=json` for valid JSON without comments.
+
+### 🏢 **Enterprise Integration**
+
+**Migrate from existing .env files:**
+```bash
+# Convert existing .env files to .align format
+align migrate-from-env --env-files=config/.env.stage,config/.env.prod
+
+# This creates:
+# - config/align.schema.json (schema from your variables)
+# - config/stage.align (converted from .env.stage)
+# - config/prod.align (converted from .env.prod)
+```
+
+**Generate from Angular environment.ts:**
+```bash
+# Extract environment variables from Angular
+align infer-from-angular --src=src/environment.ts
+
+# This creates:
+# - config/align.schema.json (schema from Angular environment)
+# - config/base.align (default values from Angular)
+```
+
+**Build Docker-compatible .env files:**
+```bash
+# Generate exact .env format for Docker builds
+align build --env=prod --format=env --out=.env
+
+# Output format (no quotes, Docker-compatible):
+# APP_NAME=myapp
+# PORT=3000
+# DEBUG=true
+# ENABLE_SIGNUP=true
+# ENABLE_DARK_MODE=false
+```
+
+**Replace CI/CD commands:**
+```bash
+# Instead of: cp config/.env.prod .env
+# Use: align build --env=prod --format=env --out=.env
+
+# GitHub Actions example:
+# - name: Generate .env file
+#   run: align build --env=${{ github.ref_name }} --format=env --out=.env
+
+# CircleCI example:
+# - run: align build --env=$CIRCLE_BRANCH --format=env --out=.env
+```
 
 **🐍 Python (.py):**
 ```python
@@ -2531,6 +2616,15 @@ $ node index.js diff --env1=dev --env2=prod
 - ✅ **Analysis** - Security and performance insights
 - ✅ **Templates** - 8 project templates with best practices
 
+### 🏢 **Enterprise Features**
+- ✅ **Angular Integration** - Import from `src/environment.ts`
+- ✅ **.env Migration** - Convert existing `.env` files to `.align`
+- ✅ **Docker Compatibility** - Generate exact `.env` format for builds
+- ✅ **CI/CD Integration** - One-line replacement for file copying
+- ✅ **Boolean Type Support** - `ENABLE_SIGNUP=true` converts properly
+- ✅ **Multi-Environment Support** - `dev-alpha`, `dev-bravo`, `qa`, `prod`
+- ✅ **SOC2 Compliance** - Secret detection, policy enforcement, audit trails
+
 ### Advanced Features
 - ✅ **🔍 Diagnose Mode** - Scan scattered configs and suggest migrations
 - ✅ **📦 Library-Aware Config** - Package schemas with namespacing
@@ -2553,6 +2647,9 @@ $ node index.js diff --env1=dev --env2=prod
 - ✅ **Heroku** - Environment variable compatibility
 - ✅ **Docker** - Build-time configuration
 - ✅ **Kubernetes** - ConfigMap generation
+- ✅ **Angular** - Import from `environment.ts` files
+- ✅ **AWS Lambda** - Environment variable management
+- ✅ **CircleCI/GitHub Actions** - CI/CD pipeline integration
 - ✅ **Any Platform** - JSON/YAML/.env output
 
 ### Developer Experience

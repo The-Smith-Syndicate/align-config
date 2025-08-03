@@ -58,7 +58,14 @@ const {
   applyMigration,
   bumpSchemaVersion,
   bumpConfigVersion,
-  validateMigrationCompatibility
+  validateMigrationCompatibility,
+  // Angular and .env migration functions
+  extractAngularEnvironmentVars,
+  generateSchemaFromAngular,
+  generateBaseAlignFromAngular,
+  parseEnvFile,
+  generateSchemaFromEnvVars,
+  generateAlignFromEnvVars
 } = require('./parser');
 const { Command } = require('commander');
 const chalk = require('chalk');
@@ -68,7 +75,7 @@ const yaml = require('js-yaml');
 const inquirer = require('inquirer');
 
 const program = new Command();
-program.name('align').description('Align config CLI').version('1.0.4');
+program.name('align').description('Align config CLI').version('1.0.5');
 
 // INIT COMMAND
 program
@@ -380,18 +387,20 @@ program
               comment = ` # ${schema.properties[key].description}`;
             }
             
-            // Handle different value types
+            // Handle different value types with boolean conversion
             let envValue;
             if (typeof value === 'string') {
-              envValue = `"${value}"`;
+              // Remove quotes for .env format (Docker expects KEY=value)
+              envValue = value;
             } else if (typeof value === 'boolean') {
-              envValue = value;
+              // Convert boolean to string for .env format
+              envValue = value.toString();
             } else if (typeof value === 'number') {
-              envValue = value;
+              envValue = value.toString();
             } else if (Array.isArray(value)) {
-              envValue = `"${value.join(',')}"`;
+              envValue = value.join(',');
             } else {
-              envValue = `"${String(value)}"`;
+              envValue = String(value);
             }
             
             return `${envKey}=${envValue}${comment}`;
@@ -3231,6 +3240,149 @@ program
       
     } catch (error) {
       console.error(chalk.red('❌ Error validating module:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('infer-from-angular')
+  .description('Infer schema from Angular environment files')
+  .option('--src <path>', 'Path to Angular environment file (default: src/environment.ts)', 'src/environment.ts')
+  .option('--out <path>', 'Output schema file (default: config/align.schema.json)', 'config/align.schema.json')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .action(async (options) => {
+    try {
+      const srcPath = path.resolve(options.src);
+      const outPath = path.resolve(options.out);
+      const configDir = path.resolve(options.configDir);
+      
+      if (!fs.existsSync(srcPath)) {
+        console.error(chalk.red(`❌ Angular environment file not found: ${srcPath}`));
+        console.log(chalk.gray('Expected file: src/environment.ts'));
+        process.exit(1);
+      }
+      
+      console.log(chalk.blue(`🔍 Reading Angular environment file: ${srcPath}`));
+      const content = fs.readFileSync(srcPath, 'utf8');
+      
+      // Extract environment variables from Angular environment file
+      const envVars = extractAngularEnvironmentVars(content);
+      
+      if (Object.keys(envVars).length === 0) {
+        console.log(chalk.yellow('⚠️  No environment variables found in Angular file'));
+        return;
+      }
+      
+      // Generate schema from Angular environment
+      const schema = generateSchemaFromAngular(envVars);
+      
+      // Ensure output directory exists
+      const outDir = path.dirname(outPath);
+      if (!fs.existsSync(outDir)) {
+        fs.mkdirSync(outDir, { recursive: true });
+      }
+      
+      // Write schema file
+      fs.writeFileSync(outPath, JSON.stringify(schema, null, 2));
+      
+      console.log(chalk.green(`✅ Schema generated from Angular environment: ${outPath}`));
+      console.log(chalk.blue(`📊 Found ${Object.keys(envVars).length} environment variables`));
+      
+      // Generate base .align file
+      const baseAlignPath = path.join(configDir, 'base.align');
+      const baseAlignContent = generateBaseAlignFromAngular(envVars);
+      
+      if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+      }
+      
+      fs.writeFileSync(baseAlignPath, baseAlignContent);
+      console.log(chalk.green(`✅ Base configuration generated: ${baseAlignPath}`));
+      
+      console.log(chalk.blue('💡 Next steps:'));
+      console.log(chalk.gray('1. Review the generated schema and base configuration'));
+      console.log(chalk.gray('2. Create environment-specific .align files (dev.align, prod.align)'));
+      console.log(chalk.gray('3. Run: align build --env=dev --format=env --out=.env'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error inferring from Angular:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('migrate-from-env')
+  .description('Migrate existing .env files to .align format')
+  .option('--env-files <files>', 'Comma-separated list of .env files', 'config/.env.stage,config/.env.prod')
+  .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
+  .option('--out <path>', 'Output schema file (default: config/align.schema.json)', 'config/align.schema.json')
+  .action(async (options) => {
+    try {
+      const envFiles = options.envFiles.split(',').map(f => f.trim());
+      const configDir = path.resolve(options.configDir);
+      const outPath = path.resolve(options.out);
+      
+      console.log(chalk.blue(`🔍 Migrating .env files to .align format`));
+      
+      const allEnvVars = {};
+      const envConfigs = {};
+      
+      // Read all .env files
+      for (const envFile of envFiles) {
+        const envPath = path.resolve(envFile);
+        if (!fs.existsSync(envPath)) {
+          console.log(chalk.yellow(`⚠️  Skipping non-existent file: ${envFile}`));
+          continue;
+        }
+        
+        console.log(chalk.blue(`📁 Reading: ${envFile}`));
+        const content = fs.readFileSync(envPath, 'utf8');
+        const envVars = parseEnvFile(content);
+        
+        // Extract environment name from filename
+        const envName = path.basename(envFile, '.env').replace('.env.', '');
+        envConfigs[envName] = envVars;
+        
+        // Merge all variables for schema generation
+        Object.assign(allEnvVars, envVars);
+      }
+      
+      if (Object.keys(allEnvVars).length === 0) {
+        console.log(chalk.yellow('⚠️  No environment variables found in .env files'));
+        return;
+      }
+      
+      // Generate schema from .env files
+      const schema = generateSchemaFromEnvVars(allEnvVars);
+      
+      // Ensure output directory exists
+      const outDir = path.dirname(outPath);
+      if (!fs.existsSync(outDir)) {
+        fs.mkdirSync(outDir, { recursive: true });
+      }
+      
+      // Write schema file
+      fs.writeFileSync(outPath, JSON.stringify(schema, null, 2));
+      console.log(chalk.green(`✅ Schema generated: ${outPath}`));
+      
+      // Generate .align files for each environment
+      for (const [envName, envVars] of Object.entries(envConfigs)) {
+        const alignPath = path.join(configDir, `${envName}.align`);
+        const alignContent = generateAlignFromEnvVars(envVars);
+        
+        if (!fs.existsSync(configDir)) {
+          fs.mkdirSync(configDir, { recursive: true });
+        }
+        
+        fs.writeFileSync(alignPath, alignContent);
+        console.log(chalk.green(`✅ Generated: ${alignPath}`));
+      }
+      
+      console.log(chalk.blue('💡 Migration complete!'));
+      console.log(chalk.gray('You can now use: align build --env=stage --format=env --out=.env'));
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error migrating from .env:'), error.message);
       process.exit(1);
     }
   });

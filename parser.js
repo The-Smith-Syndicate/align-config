@@ -4954,6 +4954,182 @@ function validateMigrationCompatibility(schema, config, targetVersion) {
   };
 }
 
+// Angular Integration Functions
+function extractAngularEnvironmentVars(content) {
+  const envVars = {};
+  
+  // Extract environment variables from Angular environment.ts file
+  const lines = content.split('\n');
+  
+  for (const line of lines) {
+    // Look for property assignments like: propertyName: value
+    const propertyMatch = line.match(/^\s*(\w+)\s*:\s*(.+?)(?:,|$)/);
+    if (propertyMatch) {
+      const key = propertyMatch[1];
+      let value = propertyMatch[2].trim();
+      
+      // Remove quotes and semicolons
+      value = value.replace(/['"]/g, '').replace(/;$/, '');
+      
+      // Convert boolean strings
+      if (value === 'true' || value === 'false') {
+        envVars[key] = value === 'true';
+      } else if (value === 'null' || value === 'undefined') {
+        envVars[key] = null;
+      } else if (!isNaN(value) && value !== '') {
+        envVars[key] = parseFloat(value);
+      } else {
+        envVars[key] = value;
+      }
+    }
+  }
+  
+  return envVars;
+}
+
+function generateSchemaFromAngular(envVars) {
+  const schema = {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    type: 'object',
+    properties: {},
+    required: []
+  };
+  
+  for (const [key, value] of Object.entries(envVars)) {
+    const property = {
+      type: inferType(value),
+      description: `Environment variable for ${key}`
+    };
+    
+    // Add default value
+    if (value !== null && value !== undefined) {
+      property.default = value;
+    }
+    
+    // Make optional if value is null/undefined
+    if (value === null || value === undefined) {
+      property.type = ['string', 'null'];
+    }
+    
+    schema.properties[key] = property;
+  }
+  
+  return schema;
+}
+
+function generateBaseAlignFromAngular(envVars) {
+  let content = '# Generated from Angular environment.ts\n';
+  content += '# Base configuration with default values\n\n';
+  
+  for (const [key, value] of Object.entries(envVars)) {
+    if (value === null || value === undefined) {
+      content += `${key}=\n`;
+    } else if (typeof value === 'string') {
+      content += `${key}=${value}\n`;
+    } else if (typeof value === 'boolean') {
+      content += `${key}=${value}\n`;
+    } else if (typeof value === 'number') {
+      content += `${key}=${value}\n`;
+    } else {
+      content += `${key}=${String(value)}\n`;
+    }
+  }
+  
+  return content;
+}
+
+// .env Migration Functions
+function parseEnvFile(content) {
+  const envVars = {};
+  const lines = content.split('\n');
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    
+    // Skip empty lines and comments
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+    
+    // Parse KEY=value format
+    const equalIndex = trimmed.indexOf('=');
+    if (equalIndex !== -1) {
+      const key = trimmed.substring(0, equalIndex).trim();
+      let value = trimmed.substring(equalIndex + 1).trim();
+      
+      // Remove quotes if present
+      if ((value.startsWith('"') && value.endsWith('"')) || 
+          (value.startsWith('\'') && value.endsWith('\''))) {
+        value = value.slice(1, -1);
+      }
+      
+      // Convert boolean strings
+      if (value === 'true' || value === 'false') {
+        envVars[key] = value === 'true';
+      } else if (value === 'null' || value === 'undefined') {
+        envVars[key] = null;
+      } else if (!isNaN(value) && value !== '') {
+        envVars[key] = parseFloat(value);
+      } else {
+        envVars[key] = value;
+      }
+    }
+  }
+  
+  return envVars;
+}
+
+function generateSchemaFromEnvVars(envVars) {
+  const schema = {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    type: 'object',
+    properties: {},
+    required: []
+  };
+  
+  for (const [key, value] of Object.entries(envVars)) {
+    const property = {
+      type: inferType(value),
+      description: `Environment variable for ${key}`
+    };
+    
+    // Add default value
+    if (value !== null && value !== undefined) {
+      property.default = value;
+    }
+    
+    // Make optional if value is null/undefined
+    if (value === null || value === undefined) {
+      property.type = ['string', 'null'];
+    }
+    
+    schema.properties[key] = property;
+  }
+  
+  return schema;
+}
+
+function generateAlignFromEnvVars(envVars) {
+  let content = '# Generated from .env file\n';
+  content += '# Environment-specific configuration\n\n';
+  
+  for (const [key, value] of Object.entries(envVars)) {
+    if (value === null || value === undefined) {
+      content += `${key}=\n`;
+    } else if (typeof value === 'string') {
+      content += `${key}=${value}\n`;
+    } else if (typeof value === 'boolean') {
+      content += `${key}=${value}\n`;
+    } else if (typeof value === 'number') {
+      content += `${key}=${value}\n`;
+    } else {
+      content += `${key}=${String(value)}\n`;
+    }
+  }
+  
+  return content;
+}
+
 module.exports = {
   parseAlign,
   parseValue,
@@ -5026,6 +5202,13 @@ module.exports = {
   applyMigration,
   bumpSchemaVersion,
   bumpConfigVersion,
-  validateMigrationCompatibility
+  validateMigrationCompatibility,
+  // Angular and .env migration functions
+  extractAngularEnvironmentVars,
+  generateSchemaFromAngular,
+  generateBaseAlignFromAngular,
+  parseEnvFile,
+  generateSchemaFromEnvVars,
+  generateAlignFromEnvVars
 };
   
