@@ -9,7 +9,7 @@
 and unified across environments. Replace scattered `.env`, YAML, JSON, and Kubernetes overrides with a single source of 
 truth: `.align` files.
 
-**📦 [Available on npm](https://www.npmjs.com/package/align-config) • 🏷️ Version 1.0.3**
+**📦 [Available on npm](https://www.npmjs.com/package/align-config) • 🏷️ Version 1.0.4**
 
 ## 📋 Table of Contents
 
@@ -2661,7 +2661,7 @@ npm test
 - **🐛 Issues**: Report bugs on [GitHub Issues](https://github.com/thesmithsyndicate/align-config/issues)
 - **📚 Documentation**: Check the README and [examples](./examples/) directory
 - **💬 Questions**: Open a [GitHub Discussion](https://github.com/thesmithsyndicate/align-config/discussions)
-- **📧 Email**: For private support, contact [your-email@example.com]
+- **📧 Email**: For private support, contact [contact@thesmithsyndicate.com]
 
 ## 🏆 Acknowledgments
 
