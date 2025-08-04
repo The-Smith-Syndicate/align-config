@@ -1763,8 +1763,18 @@ function applyRepairsAuto(plan, options, projectDir) {
     if (envFiles.length > 0) {
       console.log(chalk.blue('📁 Creating Align configuration structure...'));
       
+      // SECURITY WARNING: This operation copies secrets from .env to .align files
+      console.log(chalk.red('⚠️  SECURITY WARNING: This will copy secrets from .env files to .align files'));
+      console.log(chalk.red('   .align files are NOT protected by .cursorignore and may be readable by AI tools'));
+      console.log(chalk.red('   Consider using --exclude-sensitive or --secrets-only for sensitive data'));
+      
       // Parse .env files to extract key-value pairs
       const configData = {};
+      const sensitivePatterns = [
+        /password/i, /secret/i, /key/i, /token/i, /auth/i, /credential/i,
+        /api_key/i, /private_key/i, /access_token/i, /refresh_token/i,
+        /jwt_secret/i, /session_secret/i, /encryption_key/i
+      ];
       
       for (const envFile of envFiles) {
         let content;
@@ -1782,6 +1792,15 @@ function applyRepairsAuto(plan, options, projectDir) {
           if (match) {
             const key = match[1].toLowerCase().replace(/_/g, '_');
             let value = match[2].replace(/^["']|["']$/g, '');
+            
+            // Check if this is a sensitive field
+            const isSensitive = sensitivePatterns.some(pattern => pattern.test(key));
+            
+            // Skip sensitive fields unless explicitly allowed
+            if (isSensitive && !options.includeSecrets) {
+              console.log(chalk.yellow(`  ⚠️  Skipping sensitive field: ${key}`));
+              return;
+            }
             
             // Convert types
             if (key === 'port' || key === 'database_pool_size') {
@@ -6516,6 +6535,75 @@ function generateSOC2Recommendations(checklist, scores) {
   return recommendations;
 }
 
+// Create or update .cursorignore file to protect sensitive files
+function updateCursorIgnore(projectDir, options = {}) {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const cursorIgnorePath = path.join(projectDir, '.cursorignore');
+  const alignPatterns = [
+    '# Align configuration files (may contain secrets)',
+    'config/*.align',
+    'config/align.schema.json',
+    'config/modules/*/align.schema.json',
+    '',
+    '# Backup directories',
+    '.align-backup-*',
+    '',
+    '# Generated output files',
+    'output/*.json',
+    'output/*.yaml',
+    'output/*.yml',
+    '',
+    '# Environment files',
+    '.env',
+    '.env.local',
+    '.env.*.local'
+  ];
+  
+  let existingContent = '';
+  let needsUpdate = false;
+  
+  // Read existing .cursorignore if it exists
+  if (fs.existsSync(cursorIgnorePath)) {
+    existingContent = fs.readFileSync(cursorIgnorePath, 'utf8');
+    
+    // Check if align patterns are already present
+    const hasAlignPatterns = alignPatterns.some(pattern => 
+      !pattern.startsWith('#') && existingContent.includes(pattern)
+    );
+    
+    if (!hasAlignPatterns) {
+      needsUpdate = true;
+    }
+  } else {
+    needsUpdate = true;
+  }
+  
+  if (needsUpdate) {
+    let newContent = existingContent;
+    
+    // Add separator if existing content doesn't end with newline
+    if (existingContent && !existingContent.endsWith('\n')) {
+      newContent += '\n';
+    }
+    
+    // Add align patterns
+    newContent += alignPatterns.join('\n');
+    
+    // Write updated .cursorignore
+    fs.writeFileSync(cursorIgnorePath, newContent);
+    
+    if (options.verbose) {
+      console.log(chalk.green('✅ Updated .cursorignore to protect .align files'));
+    }
+    
+    return true;
+  }
+  
+  return false;
+}
+
 module.exports = {
   parseAlign,
   parseValue,
@@ -6619,6 +6707,7 @@ module.exports = {
   generateStrongSecret,
   parseNamespacedKey,
   isUrl,
-  isEmail
+  isEmail,
+  updateCursorIgnore
 };
   

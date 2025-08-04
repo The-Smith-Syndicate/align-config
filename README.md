@@ -16,7 +16,7 @@ truth: `.align` files. **Perfect for Angular apps, AWS Lambda, and enterprise CI
 - ✅ **Configuration Analytics** - Usage tracking and optimization insights
 - ✅ **45+ Features** - Comprehensive testing with edge cases
 
-**📦 [Available on npm](https://www.npmjs.com/package/align-config) • 🏷️ Version 1.0.5**
+**📦 [Available on npm](https://www.npmjs.com/package/align-config) • 🏷️ Version 1.0.6**
 
 ## 📋 Table of Contents
 
@@ -3239,3 +3239,61 @@ Create a file like `config/modules/auth/align.schema.json`:
 You can use this for both local modules and package schemas (from `node_modules`).
 
 --- 
+
+## 🚨 **SECURITY WARNING: AI Tool Compatibility**
+
+**⚠️ CRITICAL: `.align` files are NOT protected by `.cursorignore`**
+
+When migrating from `.env` files to `.align` files, **secrets may become visible to AI tools like Cursor**:
+
+### **The Risk:**
+- `.env` files are typically protected by `.cursorignore` 
+- `.align` files are **NOT** protected and can be read by AI assistants
+- Running `align repair` or `migrate-from-env` copies secrets from `.env` to `.align` files
+- **AI tools can then see and potentially expose these secrets**
+
+### **Safe Usage Options:**
+
+**Option 1: Exclude Sensitive Fields (Recommended)**
+```bash
+# Skip passwords, keys, tokens when migrating
+align migrate-from-env --exclude-sensitive --env-files=.env,.env.prod
+
+# Or use repair with exclusion
+align repair --exclude-sensitive --auto
+```
+
+**Option 2: Secrets-Only Migration**
+```bash
+# Only migrate sensitive fields to separate secret management
+align migrate-from-env --secrets-only --env-files=.env,.env.prod
+```
+
+**Option 3: Explicit Consent (Use with Caution)**
+```bash
+# Explicitly allow copying secrets (knowing the risks)
+align migrate-from-env --include-secrets --env-files=.env,.env.prod
+```
+
+### **Best Practices:**
+1. **Always use `--exclude-sensitive`** when migrating existing projects
+2. **Review generated `.align` files** before committing
+3. **Use external secret management** for sensitive values
+4. **Add `.align` files to `.cursorignore`** if they contain secrets
+5. **Use `--protect-cursor`** to automatically update `.cursorignore`
+
+### **Automatic Protection:**
+```bash
+# Automatically create/update .cursorignore to protect .align files
+align protect-cursor
+
+# Or combine with migration
+align migrate-from-env --exclude-sensitive --protect-cursor --env-files=.env,.env.prod
+```
+
+### **Example `.cursorignore` Addition:**
+```
+# Protect .align files that may contain secrets
+config/*.align
+config/align.schema.json
+```

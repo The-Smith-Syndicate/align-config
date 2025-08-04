@@ -1,0 +1,17 @@
+# Align configuration files (may contain secrets)
+config/*.align
+config/align.schema.json
+config/modules/*/align.schema.json
+
+# Backup directories
+.align-backup-*
+
+# Generated output files
+output/*.json
+output/*.yaml
+output/*.yml
+
+# Environment files
+.env
+.env.local
+.env.*.local

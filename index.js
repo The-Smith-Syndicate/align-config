@@ -82,7 +82,8 @@ const {
   unlockEnvironment,
   // SOC 2 compliance functions
   generateSOC2Checklist,
-  loadSchema
+  loadSchema,
+  updateCursorIgnore
 } = require('./parser');
 const { Command } = require('commander');
 const chalk = require('chalk');
@@ -92,7 +93,7 @@ const yaml = require('js-yaml');
 const inquirer = require('inquirer');
 
 const program = new Command();
-program.name('align').description('Align config CLI').version('1.0.5');
+program.name('align').description('Align config CLI').version('1.0.6');
 
 // INIT COMMAND
 program
@@ -3391,6 +3392,10 @@ program
   .option('--env-files <files>', 'Comma-separated list of .env files', 'config/.env.stage,config/.env.prod')
   .option('--config-dir <dir>', 'Configuration directory (default: ./config)', './config')
   .option('--out <path>', 'Output schema file (default: config/align.schema.json)', 'config/align.schema.json')
+  .option('--exclude-sensitive', 'Exclude sensitive fields (passwords, keys, tokens) from .align files')
+  .option('--include-secrets', 'Include sensitive fields (use with caution - may expose secrets to AI tools)')
+  .option('--secrets-only', 'Only migrate sensitive fields to separate secret management')
+  .option('--protect-cursor', 'Automatically create/update .cursorignore to protect .align files')
   .action(async (options) => {
     try {
       const envFiles = options.envFiles.split(',').map(f => f.trim());
@@ -3399,8 +3404,23 @@ program
       
       console.log(chalk.blue(`🔍 Migrating .env files to .align format`));
       
+      // SECURITY WARNING
+      if (!options.excludeSensitive && !options.secretsOnly) {
+        console.log(chalk.red('⚠️  SECURITY WARNING: This will copy secrets from .env files to .align files'));
+        console.log(chalk.red('   .align files are NOT protected by .cursorignore and may be readable by AI tools'));
+        console.log(chalk.red('   Use --exclude-sensitive to skip sensitive fields or --secrets-only for secret management'));
+        console.log(chalk.red('   Use --include-secrets to explicitly allow copying secrets (use with caution)'));
+        console.log(chalk.red('   Use --protect-cursor to automatically update .cursorignore'));
+        console.log('');
+      }
+      
       const allEnvVars = {};
       const envConfigs = {};
+      const sensitivePatterns = [
+        /password/i, /secret/i, /key/i, /token/i, /auth/i, /credential/i,
+        /api_key/i, /private_key/i, /access_token/i, /refresh_token/i,
+        /jwt_secret/i, /session_secret/i, /encryption_key/i
+      ];
       
       // Read all .env files
       for (const envFile of envFiles) {
@@ -3414,12 +3434,40 @@ program
         const content = fs.readFileSync(envPath, 'utf8');
         const envVars = parseEnvFile(content);
         
+        // Filter sensitive fields based on options
+        const filteredEnvVars = {};
+        const sensitiveVars = {};
+        
+        Object.entries(envVars).forEach(([key, value]) => {
+          const isSensitive = sensitivePatterns.some(pattern => pattern.test(key));
+          
+          if (isSensitive) {
+            if (options.secretsOnly) {
+              // Only include sensitive fields
+              sensitiveVars[key] = value;
+            } else if (options.excludeSensitive) {
+              // Skip sensitive fields
+              console.log(chalk.yellow(`  ⚠️  Skipping sensitive field: ${key}`));
+            } else if (options.includeSecrets) {
+              // Include sensitive fields (with warning)
+              console.log(chalk.red(`  ⚠️  Including sensitive field: ${key}`));
+              filteredEnvVars[key] = value;
+            } else {
+              // Default: skip sensitive fields
+              console.log(chalk.yellow(`  ⚠️  Skipping sensitive field: ${key}`));
+            }
+          } else {
+            // Non-sensitive fields are always included
+            filteredEnvVars[key] = value;
+          }
+        });
+        
         // Extract environment name from filename
         const envName = path.basename(envFile, '.env').replace('.env.', '');
-        envConfigs[envName] = envVars;
+        envConfigs[envName] = options.secretsOnly ? sensitiveVars : filteredEnvVars;
         
         // Merge all variables for schema generation
-        Object.assign(allEnvVars, envVars);
+        Object.assign(allEnvVars, options.secretsOnly ? sensitiveVars : filteredEnvVars);
       }
       
       if (Object.keys(allEnvVars).length === 0) {
@@ -3453,8 +3501,23 @@ program
         console.log(chalk.green(`✅ Generated: ${alignPath}`));
       }
       
-      console.log(chalk.blue('💡 Migration complete!'));
-      console.log(chalk.gray('You can now use: align build --env=stage --format=env --out=.env'));
+      // Update .cursorignore if requested
+      if (options.protectCursor) {
+        const updated = updateCursorIgnore(process.cwd(), { verbose: true });
+        if (updated) {
+          console.log(chalk.green('✅ Updated .cursorignore to protect .align files'));
+        } else {
+          console.log(chalk.gray('ℹ️  .cursorignore already contains protection for .align files'));
+        }
+      }
+      
+      if (options.secretsOnly) {
+        console.log(chalk.blue('💡 Secrets-only migration complete!'));
+        console.log(chalk.gray('Consider using external secret management for these sensitive values'));
+      } else {
+        console.log(chalk.blue('💡 Migration complete!'));
+        console.log(chalk.gray('You can now use: align build --env=stage --format=env --out=.env'));
+      }
       
     } catch (error) {
       console.error(chalk.red('❌ Error migrating from .env:'), error.message);
@@ -3462,7 +3525,30 @@ program
     }
   });
 
-
+program
+  .command('protect-cursor')
+  .description('Create or update .cursorignore to protect sensitive .align files')
+  .option('--verbose', 'Show detailed output')
+  .action(async (options) => {
+    try {
+      const updated = updateCursorIgnore(process.cwd(), { verbose: options.verbose });
+      
+      if (updated) {
+        console.log(chalk.green('✅ Updated .cursorignore to protect .align files'));
+        console.log(chalk.gray('Added protection for:'));
+        console.log(chalk.gray('  - config/*.align'));
+        console.log(chalk.gray('  - config/align.schema.json'));
+        console.log(chalk.gray('  - .align-backup-*'));
+        console.log(chalk.gray('  - output/*.{json,yaml,yml}'));
+      } else {
+        console.log(chalk.gray('ℹ️  .cursorignore already contains protection for .align files'));
+      }
+      
+    } catch (error) {
+      console.error(chalk.red('❌ Error updating .cursorignore:'), error.message);
+      process.exit(1);
+    }
+  });
 
 program
   .command('build-ci')
